@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlmodel import Session, select
 
 from app.auth.deps import get_current_user
-from app.auth.models import LoginRequest, SignupRequest, TokenResponse, User, UserPublic
+from app.auth.models import EmailAvailability, LoginRequest, SignupRequest, TokenResponse, User, UserPublic, normalize_email
 from app.auth.security import create_access_token, hash_password, verify_password
 from app.errors import api_error
 
@@ -37,6 +37,18 @@ def login(body: LoginRequest, request: Request) -> TokenResponse:
             raise api_error("INVALID_CREDENTIALS")
         token = create_access_token(user.id, settings)
         return TokenResponse(access_token=token, user=UserPublic(id=user.id, email=user.email, created_at=user.created_at))
+
+
+@router.get("/check-email", response_model=EmailAvailability)
+def check_email(email: str, request: Request) -> EmailAvailability:
+    # 로그인이 필요 없다 - 가입 전에 입력칸만 보고 확인하는 용도다.
+    try:
+        normalized = normalize_email(email)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    with Session(request.app.state.db_engine) as session:
+        existing = session.exec(select(User).where(User.email == normalized)).first()
+        return EmailAvailability(available=existing is None)
 
 
 @router.get("/me", response_model=UserPublic)
