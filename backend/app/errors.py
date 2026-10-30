@@ -24,6 +24,8 @@ _ERRORS: Dict[str, Tuple[int, str]] = {
     "INVALID_CREDENTIALS": (401, "이메일 또는 비밀번호가 올바르지 않습니다."),
     "EMAIL_TAKEN": (409, "이미 가입된 이메일입니다."),
     "UNAUTHORIZED": (401, "로그인이 필요합니다."),
+    "FAVORITE_NOT_FOUND": (404, "즐겨찾기를 찾을 수 없습니다."),
+    "FAVORITE_KIND_TAKEN": (409, "집/회사는 하나만 등록할 수 있습니다. 기존 항목을 수정해 주세요."),
 }
 
 
