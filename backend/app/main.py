@@ -12,6 +12,7 @@ from app.cache import TtlCache
 from app.config import Settings, get_settings
 from app.db import create_db_and_tables, make_engine
 from app.errors import ApiError
+from app.favorites.router import router as favorites_router
 from app.navigation.routers import geocode_router, router as navigation_router
 from app.routers import geo, traffic
 from app.service import TrafficService
@@ -52,7 +53,7 @@ def create_app(
 
     app = FastAPI(title="티끌모아Data API", version="0.1.0", lifespan=lifespan)
     app.add_middleware(
-        CORSMiddleware, allow_origins=settings.cors_origins(), allow_methods=["GET", "POST"], allow_headers=["*"]
+        CORSMiddleware, allow_origins=settings.cors_origins(), allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["*"]
     )
 
     @app.exception_handler(ApiError)
@@ -74,6 +75,7 @@ def create_app(
     app.include_router(navigation_router)
     app.include_router(geocode_router)
     app.include_router(auth_router)
+    app.include_router(favorites_router)
     return app
 
 
