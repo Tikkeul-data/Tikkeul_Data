@@ -110,6 +110,7 @@ class CautionZone(BaseModel):
     step_type: str
     start: CautionPoint = Field(description="이벤트 시작 위치")
     notice: Optional[CautionPoint] = Field(None, description="안내 문구를 받는 위치")
+    event_key: str = Field("", description="같은 구역을 가리키는 안정 키. message 가 바뀌어도 그대로다. id 와 달리 문구에 영향받지 않는다")
 
 
 class CautionZonesResponse(BaseModel):

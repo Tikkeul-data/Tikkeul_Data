@@ -177,6 +177,19 @@ def test_parse_incidents_keeps_closure_direction_and_raw_fields():
     assert construction.ended_at is not None
 
 
+def test_caution_zone_event_key_is_stable_when_only_the_message_changes():
+    original = parse_caution_zones([CAUTION_ITEMS[0]])[0]
+    reworded = parse_caution_zones([{**CAUTION_ITEMS[0], "message": "사고잦은구간 추돌주의(갱신)"}])[0]
+    assert reworded.id != original.id  # 기존 id 는 문구까지 해시한다(occrrncId 없을 때)
+    assert reworded.event_key == original.event_key  # 같은 구역은 같은 키
+
+
+def test_caution_zone_event_key_prefers_occrrncId():
+    # occrrncId 가 있으면(CAUTION_ITEMS[1]) event_key 도 그 값을 그대로 쓴다
+    zone = parse_caution_zones([CAUTION_ITEMS[1]])[0]
+    assert zone.event_key == "20261028070000000001" == zone.id
+
+
 def test_incident_event_key_is_stable_when_only_the_message_changes():
     original = parse_incidents([EVENT_ITEMS[0]])[0]
     reworded = parse_incidents([{**EVENT_ITEMS[0], "message": "추돌 사고 (정리 중)"}])[0]

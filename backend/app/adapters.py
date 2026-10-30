@@ -142,6 +142,7 @@ def parse_caution_zones(items: List[Raw]) -> List[CautionZone]:
         result.append(
             CautionZone(
                 id=_s(raw, "occrrncId") or _digest(outbrk, _s(raw, "message"), _s(raw, "startStdLinkId"), _s(raw, "revStdLinkId")),
+                event_key=_s(raw, "occrrncId") or _digest(outbrk, _s(raw, "startStdLinkId"), _s(raw, "revStdLinkId")),
                 kind=_CAUTION_KIND.get(outbrk, CautionKind.other),
                 outbrk_type=outbrk,
                 message=_s(raw, "message"),
