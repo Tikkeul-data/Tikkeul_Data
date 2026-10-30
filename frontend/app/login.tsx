@@ -1,0 +1,108 @@
+import { Lock, Mail, X } from 'lucide-react-native';
+import { useRef, useState, type ComponentRef } from 'react';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+
+import { Logo } from '../src/components/Logo';
+import { Screen } from '../src/components/Screen';
+import { PrimaryButton } from '../src/components/ui/PrimaryButton';
+import { RoundButton } from '../src/components/ui/RoundButton';
+import { TextField } from '../src/components/ui/TextField';
+import { authErrorMessage } from '../src/lib/auth/errorMessage';
+import { useAuth } from '../src/lib/auth/AuthContext';
+import { colors, space } from '../src/theme';
+
+export default function LoginScreen() {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const { login } = useAuth();
+  // 비로그인 상태에서 로그인 전용 기능을 누르면 이 화면으로 오는데, 성공하면 원래 가려던 곳으로 돌려보낸다.
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const passwordRef = useRef<ComponentRef<typeof TextInput>>(null);
+
+  const canSubmit = email.trim().includes('@') && password.length > 0 && !submitting;
+
+  const onSubmit = async () => {
+    if (!canSubmit) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      await login(email.trim(), password);
+      if (redirect) router.replace(redirect as never);
+      else router.back();
+    } catch (e) {
+      setError(authErrorMessage(e, t));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Screen>
+      <View style={styles.topRow}>
+        <RoundButton icon={X} label={t('common.close')} variant="soft" onPress={() => router.back()} />
+      </View>
+
+      <View style={styles.header}>
+        <Logo />
+        <Text style={styles.subtitle}>{t('auth.loginSubtitle')}</Text>
+      </View>
+
+      <View style={styles.form}>
+        <TextField
+          label={t('auth.email')}
+          leadingIcon={Mail}
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoComplete="email"
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+        />
+        <TextField
+          label={t('auth.password')}
+          leadingIcon={Lock}
+          secure
+          inputRef={passwordRef}
+          value={password}
+          onChangeText={setPassword}
+          autoComplete="password"
+          returnKeyType="done"
+          onSubmitEditing={onSubmit}
+          error={error ?? undefined}
+        />
+      </View>
+
+      <PrimaryButton
+        label={submitting ? t('auth.loggingIn') : t('auth.loginButton')}
+        onPress={onSubmit}
+        disabled={!canSubmit}
+        loading={submitting}
+      />
+
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>{t('auth.noAccount')}</Text>
+        <Text style={styles.link} onPress={() => router.replace(redirect ? { pathname: '/signup', params: { redirect } } : '/signup')}>
+          {t('auth.goSignup')}
+        </Text>
+      </View>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  topRow: { flexDirection: 'row', justifyContent: 'flex-end' },
+  header: { alignItems: 'center', gap: space.xs, paddingVertical: space.lg },
+  subtitle: { fontSize: 15, color: colors.muted, textAlign: 'center' },
+  form: { gap: space.md },
+  footer: { flexDirection: 'row', justifyContent: 'center', gap: space.xs, paddingTop: space.sm },
+  footerText: { fontSize: 14, color: colors.muted },
+  link: { fontSize: 14, fontWeight: '800', color: colors.brand },
+});

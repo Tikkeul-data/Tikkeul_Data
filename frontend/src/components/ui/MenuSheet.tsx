@@ -1,10 +1,11 @@
-import { Check, House, Map as MapIcon, TriangleAlert, X, type LucideIcon } from 'lucide-react-native';
+import { Check, Heart, House, LogOut, Map as MapIcon, TriangleAlert, User, X, type LucideIcon } from 'lucide-react-native';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { LANGUAGES, type Language } from '../../i18n';
+import { useAuth } from '../../lib/auth/AuthContext';
 import { MAX_CONTENT_WIDTH, colors, radius, shadow, space } from '../../theme';
 import { Chip } from './Chip';
 import { Icon } from './Icon';
@@ -29,10 +30,26 @@ export function MenuSheet({ visible, onClose }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const { status, user, logout } = useAuth();
 
   const goTo = (href: (typeof PAGES)[number]['href']) => {
     onClose();
     router.navigate(href);
+  };
+
+  const goToFavorites = () => {
+    onClose();
+    router.navigate('/favorites');
+  };
+
+  const goToLogin = () => {
+    onClose();
+    router.navigate('/login');
+  };
+
+  const onLogout = () => {
+    onClose();
+    logout();
   };
 
   return (
@@ -73,6 +90,44 @@ export function MenuSheet({ visible, onClose }: Props) {
                 </Pressable>
               );
             })}
+          </View>
+
+          <View style={styles.account}>
+            {status === 'authenticated' && user ? (
+              <>
+                <View style={styles.accountRow}>
+                  <Icon icon={User} size={20} color={colors.muted} />
+                  <Text style={styles.accountEmail} numberOfLines={1}>
+                    {user.email}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={goToFavorites}
+                  accessibilityRole="menuitem"
+                  style={({ pressed }) => [styles.page, pressed && styles.pressed]}
+                >
+                  <Icon icon={Heart} size={22} color={colors.ink} />
+                  <Text style={styles.pageText}>{t('favorites.title')}</Text>
+                </Pressable>
+                <Pressable
+                  onPress={onLogout}
+                  accessibilityRole="menuitem"
+                  style={({ pressed }) => [styles.page, pressed && styles.pressed]}
+                >
+                  <Icon icon={LogOut} size={22} color={colors.dangerInk} />
+                  <Text style={[styles.pageText, styles.logoutText]}>{t('auth.logout')}</Text>
+                </Pressable>
+              </>
+            ) : (
+              <Pressable
+                onPress={goToLogin}
+                accessibilityRole="menuitem"
+                style={({ pressed }) => [styles.page, pressed && styles.pressed]}
+              >
+                <Icon icon={User} size={22} color={colors.brand} />
+                <Text style={[styles.pageText, styles.loginText]}>{t('auth.login')}</Text>
+              </Pressable>
+            )}
           </View>
 
           <View style={styles.languages}>
@@ -135,4 +190,9 @@ const styles = StyleSheet.create({
   languages: { gap: space.sm },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: colors.muted },
   languageRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  account: { gap: space.xs, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: space.sm },
+  accountRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.md, paddingVertical: space.xs },
+  accountEmail: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.muted },
+  logoutText: { color: colors.dangerInk },
+  loginText: { fontWeight: '800', color: colors.brand },
 });
