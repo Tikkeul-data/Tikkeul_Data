@@ -6,6 +6,7 @@ const client = createApiClient({ baseUrl: API_BASE_URL });
 export interface AuthUser {
   id: number;
   email: string;
+  email_verified: boolean;
   created_at: string;
 }
 
@@ -23,4 +24,6 @@ export const authApi = {
   me: (token: string, options?: RequestOptions) => client.get<AuthUser>('/api/auth/me', {}, { ...options, token }),
   checkEmail: (email: string, options?: RequestOptions) =>
     client.get<{ available: boolean }>('/api/auth/check-email', { email }, options),
+  sendVerification: (token: string, options?: RequestOptions) =>
+    client.post<{ sent: boolean }>('/api/auth/send-verification', {}, { ...options, token }),
 };
