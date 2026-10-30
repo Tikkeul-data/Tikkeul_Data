@@ -136,28 +136,27 @@ function FavoriteRow({ item, loading, onPress, onDelete }: { item: FavoritePlace
   }
 
   return (
-    <Card onPress={onPress} accessibilityLabel={item.label} style={styles.row}>
-      <View style={[styles.rowIcon, item.kind === 'custom' ? styles.rowIconCustom : styles.rowIconMain]}>
-        <Icon icon={KIND_ICON[item.kind]} size={20} color={item.kind === 'custom' ? colors.brand : colors.surface} />
-      </View>
-      <View style={styles.rowBody}>
-        <Text style={styles.rowLabel} numberOfLines={1}>
-          {item.label}
-        </Text>
-        {!!item.address_text && (
-          <Text style={styles.rowAddress} numberOfLines={1}>
-            {item.address_text}
+    <Card style={styles.row}>
+      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={item.label} style={styles.rowMain}>
+        <View style={[styles.rowIcon, item.kind === 'custom' ? styles.rowIconCustom : styles.rowIconMain]}>
+          <Icon icon={KIND_ICON[item.kind]} size={20} color={item.kind === 'custom' ? colors.brand : colors.surface} />
+        </View>
+        <View style={styles.rowBody}>
+          <Text style={styles.rowLabel} numberOfLines={1}>
+            {item.label}
           </Text>
-        )}
-      </View>
+          {!!item.address_text && (
+            <Text style={styles.rowAddress} numberOfLines={1}>
+              {item.address_text}
+            </Text>
+          )}
+        </View>
+      </Pressable>
       {loading ? (
         <ActivityIndicator color={colors.brand} />
       ) : (
         <Pressable
-          onPress={(e) => {
-            e.stopPropagation?.();
-            setConfirming(true);
-          }}
+          onPress={() => setConfirming(true)}
           accessibilityRole="button"
           accessibilityLabel={t('favorites.delete')}
           hitSlop={8}
@@ -236,6 +235,7 @@ const styles = StyleSheet.create({
   emptyHint: { fontSize: 14, color: colors.muted, textAlign: 'center' },
   list: { gap: space.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.md, minWidth: 0 },
   rowIcon: { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   rowIconMain: { backgroundColor: colors.brand },
   rowIconCustom: { backgroundColor: colors.primarySoft },
