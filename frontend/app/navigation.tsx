@@ -15,7 +15,7 @@ import { Card } from '../src/components/ui/Card';
 import { RoundButton } from '../src/components/ui/RoundButton';
 import { createReplayPort, replayFixes, replayRerouteFrom } from '../src/dev/guidanceReplay';
 import { MOCK_ROUTE_A } from '../src/dev/mockRoute';
-import { RAIL_TEST_SAMPLES, TEST_INSTRUCTIONS, TEST_SCHOOL_ZONES, TEST_SPEED_BUMPS } from '../src/dev/railSamples';
+import { RAIL_TEST_SAMPLES, TEST_ACCIDENT_PRONE_ZONES, TEST_INSTRUCTIONS, TEST_SCHOOL_ZONES, TEST_SPEED_BUMPS } from '../src/dev/railSamples';
 import { TTS_TEST_ALERTS, TTS_TEST_INSTRUCTIONS, TTS_TEST_PATH, TTS_TEST_SPEED_BUMPS, TTS_TEST_ZONES } from '../src/dev/ttsScenario';
 import { fitVisible, overflowFits, splitRail } from '../src/lib/hazardRail';
 import { displayEta } from '../src/lib/navigation/guidanceDisplay';
@@ -234,6 +234,7 @@ export default function NavigationScreen() {
     speedMps: snapshot?.speedMps ?? null,
     sampleAlerts: route?.source === 'mock' ? (scenario === 'tts' ? TTS_TEST_ALERTS : RAIL_TEST_SAMPLES) : undefined,
     sampleZoneAlerts: route?.source === 'mock' ? (scenario === 'tts' ? TTS_TEST_ZONES : TEST_SCHOOL_ZONES) : undefined,
+    sampleCautionZoneAlerts: route?.source === 'mock' ? (scenario === 'tts' ? undefined : TEST_ACCIDENT_PRONE_ZONES) : undefined,
   });
 
   // 음성 안내(팀 main 의 TTS 훅을 그대로 재사용). 길안내 중(첫 위치를 받은 뒤, 도착 전)이고 화면이 포커스일 때만 켠다.

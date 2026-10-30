@@ -62,3 +62,19 @@ export const TEST_SCHOOL_ZONES: RoadAlert[] = [
     ...mid(2),
   },
 ];
+
+/** 가상 사고다발구역(첫 번째 구간의 중간). 안내 시작 직후 가장 먼저 만나게 둔다 */
+export const TEST_ACCIDENT_PRONE_ZONES: RoadAlert[] = [
+  {
+    id: 's-accident-prone',
+    eventKey: 's-accident-prone',
+    type: 'accident_prone',
+    severity: 'caution',
+    location: '예시: 가상 사고다발구역',
+    description: '개발용 예시 사고다발구역입니다. 실제 사고다발구역이 아닙니다.',
+    updatedAt: '',
+    isSample: true,
+    omnidirectional: true,
+    ...mid(0),
+  },
+];

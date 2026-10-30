@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  cautionZoneToAlert,
+  cautionZonesToAlerts,
   childProtectionZonesToAlerts,
   incidentToAlert,
   incidentsToAlerts,
@@ -118,4 +120,44 @@ test('어린이보호구역은 방향 없이도(omnidirectional) 경로 위 위�
 test('childProtectionZonesToAlerts: 어린이 외 유형과 좌표 없는 항목은 걸러낸다', () => {
   const zones = [zone({ id: 'c1' }), zone({ id: 's1', zone_type: 'senior' }), zone({ id: 'c2', center: null })];
   assert.deepEqual(childProtectionZonesToAlerts(zones).map((a) => a.id), ['c1']);
+});
+
+const caution = (over = {}) => ({
+  id: 'cz1', kind: 'accident_prone', outbrk_type: '사고잦은구간', message: '사고 잦은 구간입니다',
+  priority: 1, step_type: 'N', event_key: 'ek1',
+  start: { location: { lat: 37.5, lon: 127.03 }, link_id: 'L1', route_no: '47', route_name: '47번국도', direction_text: '' },
+  notice: null, ...over,
+});
+
+test('사고다발구역(accident_prone)만 알림으로 바꾸고, 다른 주의운전구간 유형은 뺀다', () => {
+  assert.equal(cautionZoneToAlert(caution({ kind: 'congestion' })), null);
+  const a = cautionZoneToAlert(caution());
+  assert.equal(a.type, 'accident_prone');
+  assert.equal(a.severity, 'caution');
+  assert.equal(a.location, '47번국도');
+  assert.equal(a.description, '사고 잦은 구간입니다');
+  assert.equal(a.latitude, 37.5);
+  assert.equal(a.longitude, 127.03);
+  assert.equal(a.omnidirectional, true);
+  assert.equal(a.eventKey, 'ek1');
+  assert.ok(!('headingDeg' in a), '방향을 만들어 넣지 않는다');
+});
+
+test('사고다발구역: 도로명이 없으면 노선번호, 문구가 없으면 콘텐츠 유형을 쓴다. event_key 없으면 필드 자체를 안 만든다', () => {
+  const a = cautionZoneToAlert(caution({ start: { ...caution().start, route_name: '' }, message: ' ', event_key: '' }));
+  assert.equal(a.location, '47');
+  assert.equal(a.description, '사고잦은구간');
+  assert.ok(!('eventKey' in a));
+});
+
+test('사고다발구역은 방향 없이도(omnidirectional) 경로 위 위험으로 매칭된다', () => {
+  const p = MOCK_ROUTE_A.points[1];
+  const a = cautionZoneToAlert(caution({ start: { ...caution().start, location: { lat: p.latitude, lon: p.longitude } } }));
+  const result = matchHazardsToRoute(MOCK_ROUTE_A, [a]);
+  assert.equal(result.onRoute.length, 1);
+});
+
+test('cautionZonesToAlerts: accident_prone 외 유형은 걸러낸다', () => {
+  const zones = [caution({ id: 'a1' }), caution({ id: 'a2', kind: 'work' })];
+  assert.deepEqual(cautionZonesToAlerts(zones).map((a) => a.id), ['a1']);
 });

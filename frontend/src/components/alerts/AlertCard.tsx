@@ -20,6 +20,7 @@ export const TYPE_ICON: Record<AlertType, LucideIcon> = {
   construction: Construction,
   congestion: Car,
   school_zone: ShieldCheck,
+  accident_prone: TriangleAlert,
 };
 
 export function TypeIcon({ type, color }: { type: AlertType; color: ColorValue }) {

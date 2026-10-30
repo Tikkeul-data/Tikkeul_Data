@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 
 import { trafficApi } from '../api/api';
-import { childProtectionZonesToAlerts, incidentsToAlerts } from '../api/convert';
+import { cautionZonesToAlerts, childProtectionZonesToAlerts, incidentsToAlerts } from '../api/convert';
 import { useApi } from '../api/useApi';
 import { areaFor } from '../location/geo';
 import { prioritizeHazards, type PrioritizedHazard } from '../hazardPriority';
 import { buildHazardRail, registryZoneInput } from '../hazardRail';
-import { classifyIncidentOnRoute, matchHazardsToRoute, remainingHazards, type HazardApproach, type Route } from '../routeHazards';
+import { classifyIncidentOnRoute, matchHazardsToRoute, remainingHazards, type Freshness, type HazardApproach, type Route } from '../routeHazards';
 import { useHazardWarning } from '../useHazardWarning';
 import type { RoadAlert } from '../../types/alert';
 import type { NavRoute } from './guidanceEngine';
@@ -33,6 +33,8 @@ interface Options {
   sampleAlerts?: RoadAlert[];
   /** 개발용 가상 경로에서만 넘기는 예시 보호구역(음성 확인용). 실제 경로에서는 쓰지 않는다 */
   sampleZoneAlerts?: RoadAlert[];
+  /** 개발용 가상 경로에서만 넘기는 예시 사고다발구역. 실제 경로에서는 쓰지 않는다 */
+  sampleCautionZoneAlerts?: RoadAlert[];
 }
 
 export type HazardDataNotice = 'failed' | 'partial' | null;
@@ -47,7 +49,17 @@ export type HazardDataNotice = 'failed' | 'partial' | null;
  *
  * 한계: 보호구역 조회는 표본 조회라 전체 조회를 보장하지 않는다(coverage 'sampled'). 돌발정보는 현재 위치 주변(약 5km)만 받는다.
  */
-export function useRouteHazardWarning({ route, progressM, active, position = null, speedMps = null, includeIncidents = true, sampleAlerts, sampleZoneAlerts }: Options) {
+export function useRouteHazardWarning({
+  route,
+  progressM,
+  active,
+  position = null,
+  speedMps = null,
+  includeIncidents = true,
+  sampleAlerts,
+  sampleZoneAlerts,
+  sampleCautionZoneAlerts,
+}: Options) {
   const isApiRoute = route?.source === 'api';
   const mode = route?.mode ?? 'driving';
 
@@ -65,8 +77,32 @@ export function useRouteHazardWarning({ route, progressM, active, position = nul
   );
   const zoneOnRoute = useMemo(() => (hazardRoute ? matchHazardsToRoute(hazardRoute, zoneAlerts).onRoute : []), [hazardRoute, zoneAlerts]);
 
-  // ── ITS 돌발정보(실제 경로) 또는 예시 위험(가상 경로)
+  // 사고다발구역·ITS 돌발정보가 같은 영역(현재 위치 주변 bbox)을 조회한다.
   const area = includeIncidents && isApiRoute && position ? areaFor({ latitude: position.lat, longitude: position.lng }) : null;
+
+  // ── 사고다발구역(주의운전구간, kind=accident_prone). 보호구역과 달리 data_kind=realtime 이라
+  // registryZoneInput() 처럼 무조건 'fresh'로 두지 않고, ITS 돌발정보와 같은 기준(10분)으로 신선도를 본다.
+  const cautionZones = useApi((signal) => trafficApi.cautionZones(area!.bbox, { signal }), {
+    key: area ? `caution:${area.key}` : '',
+    enabled: !!area,
+    refreshMs: INCIDENT_REFRESH_MS,
+    keepPrevious: true,
+  });
+  const cautionZoneResponse = cautionZones.state.status === 'success' ? cautionZones.state.data : null;
+  const cautionZoneAlerts = useMemo<RoadAlert[]>(() => {
+    if (!includeIncidents) return [];
+    if (route?.source === 'mock') return sampleCautionZoneAlerts ?? [];
+    return cautionZoneResponse ? cautionZonesToAlerts(cautionZoneResponse.items) : [];
+  }, [includeIncidents, route?.source, sampleCautionZoneAlerts, cautionZoneResponse]);
+  const cautionZonesStale = cautionZoneResponse
+    ? cautionZoneResponse.meta.stale || Date.now() - Date.parse(cautionZoneResponse.meta.fetched_at) > INCIDENT_STALE_MS
+    : false;
+  const cautionZoneOnRoute = useMemo(
+    () => (hazardRoute ? matchHazardsToRoute(hazardRoute, cautionZoneAlerts).onRoute : []),
+    [hazardRoute, cautionZoneAlerts],
+  );
+
+  // ── ITS 돌발정보(실제 경로) 또는 예시 위험(가상 경로)
   const incidents = useApi((signal) => trafficApi.incidents(area!.bbox, { signal }), {
     key: area?.key ?? '',
     enabled: !!area,
@@ -96,7 +132,26 @@ export function useRouteHazardWarning({ route, progressM, active, position = nul
   }, [hazardRoute, incidentAlerts, mode, progressBucket, accuracyM, dataStale]);
 
   // 구역 전체에 적용되는 보호구역도 같은 엔진으로 순위를 매긴다(레일 정렬용). 단계 경고는 아래에서 기존 방식 그대로 쓴다.
-  const zoneInputs = useMemo(() => zoneOnRoute.map(({ alert, offsetM }) => registryZoneInput(alert, offsetM - progressBucket * 5)), [zoneOnRoute, progressBucket]);
+  const cautionZoneFreshness: Freshness = cautionZonesStale ? 'stale' : 'fresh';
+  const cautionZoneInputs = useMemo(
+    () =>
+      cautionZoneOnRoute.map(({ alert, offsetM }) => ({
+        alert,
+        match: {
+          class: 'confirmed' as const,
+          reason: 'zoneOnRoute' as const,
+          distanceAlongRouteM: offsetM - progressBucket * 5,
+          lateralM: null,
+          directionBasis: 'both' as const,
+          freshness: cautionZoneFreshness,
+        },
+      })),
+    [cautionZoneOnRoute, progressBucket, cautionZoneFreshness],
+  );
+  const zoneInputs = useMemo(
+    () => [...zoneOnRoute.map(({ alert, offsetM }) => registryZoneInput(alert, offsetM - progressBucket * 5)), ...cautionZoneInputs],
+    [zoneOnRoute, cautionZoneInputs, progressBucket],
+  );
 
   const prioritized = useMemo<PrioritizedHazard[]>(
     () => (incidentInputs.length + zoneInputs.length === 0 ? [] : prioritizeHazards([...incidentInputs, ...zoneInputs], { mode, speedMps })),
@@ -121,13 +176,15 @@ export function useRouteHazardWarning({ route, progressM, active, position = nul
   const { warning, dismiss } = useHazardWarning({
     active: active && hazardRoute !== null,
     routeKey: route?.id ?? '',
-    hazards: [...remainingHazards(zoneOnRoute, progressM), ...incidentHazards],
+    hazards: [...remainingHazards(zoneOnRoute, progressM), ...remainingHazards(cautionZoneOnRoute, progressM), ...incidentHazards],
   });
 
   // 조회 실패·부분 조회는 "위험 없음"과 구분해서 알려야 한다(경고가 안 뜨는 것이 안전하다는 뜻이 아니다).
   const zoneCoverage: ZoneCoverage | 'loading' | 'idle' = zones.status === 'done' ? zones.coverage : zones.status;
   const incidentsFailed = includeIncidents && isApiRoute && incidents.state.status === 'error';
-  const notice: HazardDataNotice = !isApiRoute ? null : zoneCoverage === 'failed' || incidentsFailed ? 'failed' : zoneCoverage === 'partial' ? 'partial' : null;
+  const cautionZonesFailed = includeIncidents && isApiRoute && cautionZones.state.status === 'error';
+  const notice: HazardDataNotice =
+    !isApiRoute ? null : zoneCoverage === 'failed' || incidentsFailed || cautionZonesFailed ? 'failed' : zoneCoverage === 'partial' ? 'partial' : null;
 
   return {
     warning,

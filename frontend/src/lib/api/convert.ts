@@ -12,9 +12,9 @@ const ALERT_TYPE: Partial<Record<IncidentKind, AlertType>> = {
 
 // 배지 문구(위험/주의/혼잡)는 유형별 화면 표기다. 공공 API 가 준 심각도 값이 아니다.
 // school_zone 은 incidentToAlert 가 만들지 않지만(ALERT_TYPE 에 없음), AlertType 전체를 키로 받는 타입이라 채워 둔다.
-const BADGE_BY_TYPE: Record<AlertType, AlertSeverity> = { accident: 'danger', construction: 'caution', congestion: 'busy', school_zone: 'caution' };
+const BADGE_BY_TYPE: Record<AlertType, AlertSeverity> = { accident: 'danger', construction: 'caution', congestion: 'busy', school_zone: 'caution', accident_prone: 'caution' };
 
-const ORDER: Record<AlertType, number> = { accident: 0, congestion: 1, construction: 2, school_zone: 3 };
+const ORDER: Record<AlertType, number> = { accident: 0, congestion: 1, construction: 2, school_zone: 3, accident_prone: 4 };
 
 export function incidentToAlert(incident: Incident, fallbackLocation: string): RoadAlert | null {
   const type = ALERT_TYPE[incident.kind];
@@ -76,6 +76,31 @@ export function protectionZoneToAlert(zone: ProtectionZone): RoadAlert | null {
 
 export function childProtectionZonesToAlerts(zones: ProtectionZone[]): RoadAlert[] {
   return zones.map(protectionZoneToAlert).filter((a): a is RoadAlert => a !== null);
+}
+
+/**
+ * 사고다발구역(kind: 'accident_prone') → 경로 매칭용 RoadAlert. 다른 주의운전구간 유형(정체·차로차단 등)은 뺀다.
+ * 방향(headingDeg)이 없어 omnidirectional 로 표시한다(보호구역과 같은 근거).
+ */
+export function cautionZoneToAlert(zone: CautionZone): RoadAlert | null {
+  if (zone.kind !== 'accident_prone') return null;
+  const alert: RoadAlert = {
+    id: zone.id,
+    type: 'accident_prone',
+    severity: 'caution',
+    location: zone.start.route_name.trim() || zone.start.route_no.trim(),
+    description: zone.message.trim() || zone.outbrk_type.trim(),
+    updatedAt: '',
+    latitude: zone.start.location.lat,
+    longitude: zone.start.location.lon,
+    omnidirectional: true,
+  };
+  if (zone.event_key) alert.eventKey = zone.event_key;
+  return alert;
+}
+
+export function cautionZonesToAlerts(zones: CautionZone[]): RoadAlert[] {
+  return zones.map(cautionZoneToAlert).filter((a): a is RoadAlert => a !== null);
 }
 
 export function sortCautionZones(zones: CautionZone[]): CautionZone[] {

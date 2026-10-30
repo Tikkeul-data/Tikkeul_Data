@@ -151,7 +151,7 @@ const zh: Resources = {
   alerts: {
     title: '风险提醒',
     filterAll: '全部',
-    type: { accident: '事故', construction: '施工', congestion: '拥堵', school_zone: '儿童保护区' },
+    type: { accident: '事故', construction: '施工', congestion: '拥堵', school_zone: '儿童保护区', accident_prone: '事故多发区' },
     severity: { danger: '危险', caution: '注意', busy: '拥挤' },
     sample: '示例数据',
     detail: '查看详情',
@@ -226,12 +226,14 @@ const zh: Resources = {
       construction: '前方{{distance}}道路施工',
       congestion: '前方{{distance}}交通拥堵',
       school_zone: '前方{{distance}}有儿童保护区',
+      accident_prone: '前方{{distance}}有事故多发区',
     },
     advance: {
       accident: '前方{{distance}}处发生了交通事故',
       construction: '前方{{distance}}处正在进行道路施工',
       congestion: '前方{{distance}}处交通拥堵',
       school_zone: '前方{{distance}}处有儿童保护区，请减速慢行',
+      accident_prone: '前方{{distance}}处有事故多发区，请减速慢行',
     },
     stage: { caution: '注意', approach: '接近警告', final: '最终警告' },
     speedBump: '前方有减速带',
