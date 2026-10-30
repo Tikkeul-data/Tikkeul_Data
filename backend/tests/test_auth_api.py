@@ -90,3 +90,35 @@ def test_signup_failure_after_user_insert_does_not_leave_a_half_created_account(
 
     with Session(client.app.state.db_engine) as session:
         assert session.exec(select(User).where(User.email == "a@example.com")).first() is None
+
+
+def test_check_email_available_for_unused_email(make_client):
+    client = make_client(lambda r: None)
+    res = client.get("/api/auth/check-email", params={"email": "fresh@example.com"})
+    assert res.status_code == 200 and res.json() == {"available": True}
+
+
+def test_check_email_unavailable_after_signup(make_client):
+    client = make_client(lambda r: None)
+    _signup(client, email="taken@example.com")
+    res = client.get("/api/auth/check-email", params={"email": "taken@example.com"})
+    assert res.status_code == 200 and res.json() == {"available": False}
+
+
+def test_check_email_normalizes_case_and_whitespace(make_client):
+    client = make_client(lambda r: None)
+    _signup(client, email="mixedcase@example.com")
+    res = client.get("/api/auth/check-email", params={"email": "  MixedCase@Example.com "})
+    assert res.status_code == 200 and res.json() == {"available": False}
+
+
+def test_check_email_rejects_malformed_email_with_422(make_client):
+    client = make_client(lambda r: None)
+    res = client.get("/api/auth/check-email", params={"email": "not-an-email"})
+    assert res.status_code == 422
+
+
+def test_check_email_does_not_require_a_token(make_client):
+    client = make_client(lambda r: None)
+    res = client.get("/api/auth/check-email", params={"email": "anyone@example.com"})
+    assert res.status_code == 200

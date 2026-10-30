@@ -74,3 +74,44 @@ test('오류 메시지와 이름에 요청 URL(좌표)이 들어가지 않는다
   const client = clientWith(async () => Promise.reject(new TypeError('fetch failed http://api.test/x?min_lon=126.9')));
   await assert.rejects(client.get('/x', { min_lon: 126.9 }), (e) => !String(e.message).includes('126.9') && !String(e.stack).includes('min_lon'));
 });
+
+test('post: JSON 본문을 보내고 Content-Type 을 붙인다', async () => {
+  let seen = null;
+  const client = clientWith(async (url, init) => ((seen = init), json({ ok: true })));
+  await client.post('/api/auth/signup', { email: 'a@b.com' });
+  assert.equal(seen.method, 'POST');
+  assert.equal(seen.headers['Content-Type'], 'application/json');
+  assert.equal(seen.body, JSON.stringify({ email: 'a@b.com' }));
+});
+
+test('token 옵션을 주면 Authorization 헤더가 붙는다', async () => {
+  let seen = null;
+  const client = clientWith(async (url, init) => ((seen = init), json({ ok: true })));
+  await client.get('/api/auth/me', {}, { token: 'abc123' });
+  assert.equal(seen.headers.Authorization, 'Bearer abc123');
+});
+
+test('token 을 안 주면 Authorization 헤더가 없다', async () => {
+  let seen = null;
+  const client = clientWith(async (url, init) => ((seen = init), json({ ok: true })));
+  await client.get('/x');
+  assert.ok(!('Authorization' in seen.headers));
+});
+
+test('204 No Content 는 본문을 읽지 않고 undefined 를 돌려준다', async () => {
+  const client = clientWith(async () => new Response(null, { status: 204 }));
+  assert.equal(await client.del('/api/favorites/1'), undefined);
+});
+
+test('204 가 아닌데 실패면(401 등) 평소대로 오류 코드로 분류한다', async () => {
+  const client = clientWith(async () => json({ error: { code: 'UNAUTHORIZED', message: '...' } }, 401));
+  await rejectsWith(client.del('/api/favorites/1'), 'unauthorized');
+});
+
+test('patch: JSON 본문을 보낸다', async () => {
+  let seen = null;
+  const client = clientWith(async (url, init) => ((seen = init), json({ ok: true })));
+  await client.patch('/api/favorites/1', { label: '새이름' });
+  assert.equal(seen.method, 'PATCH');
+  assert.equal(seen.body, JSON.stringify({ label: '새이름' }));
+});
