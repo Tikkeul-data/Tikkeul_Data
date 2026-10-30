@@ -64,7 +64,7 @@ export const PRIORITY_POLICY: Record<TravelKind, PriorityPolicy> = {
 };
 
 // 점수 구성(합 최대 95). 가중치는 같은 상황에서 "무엇이 더 위험한가"의 상대적 순서만 정한다.
-export const TYPE_POINTS: Record<RoadAlert['type'], number> = { accident: 30, construction: 20, school_zone: 25, congestion: 12 };
+export const TYPE_POINTS: Record<RoadAlert['type'], number> = { accident: 30, construction: 20, school_zone: 25, congestion: 12, accident_prone: 18 };
 export const SEVERITY_POINTS: Record<AlertSeverity, number> = { danger: 15, caution: 8, busy: 4 };
 export const FRESH_POINTS = 5;
 /** 통제 정도 가점. full 은 문자열 패턴으로 읽은 미확인 값이라 partial 보다 약간만 더 준다 */

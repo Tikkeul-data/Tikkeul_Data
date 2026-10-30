@@ -1,5 +1,5 @@
 // 위험 알림 카드용 타입. 추후 FastAPI 응답(필드명 변환 후)으로 그대로 교체할 수 있게 둔다.
-export type AlertType = 'accident' | 'construction' | 'congestion' | 'school_zone';
+export type AlertType = 'accident' | 'construction' | 'congestion' | 'school_zone' | 'accident_prone';
 export type AlertSeverity = 'danger' | 'caution' | 'busy';
 
 /** 원문(한국어) 외 언어로 번역된 표시 문구. */

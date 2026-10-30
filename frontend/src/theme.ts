@@ -34,6 +34,7 @@ export const hazardTone = {
   construction: { tint: '#FFFBEB', accent: '#D97706', strong: '#B45309' },
   congestion: { tint: '#FEFCE8', accent: '#A16207', strong: '#854D0E' },
   school_zone: { tint: '#ECFDF5', accent: '#059669', strong: '#047857' },
+  accident_prone: { tint: '#FDF2F8', accent: '#BE185D', strong: '#9D174D' },
   caution: { tint: '#EFF6FF', accent: '#2A5BD7', strong: '#1D4ED8' },
 } as const;
 
