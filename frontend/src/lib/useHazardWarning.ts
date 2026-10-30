@@ -49,7 +49,13 @@ export function useHazardWarning({ active, routeKey, hazards }: Options) {
 
   // 아직 보지 않은 (위험구간, 현재 단계) 중 우선순위가 가장 높은 것
   const candidate = ahead
-    .map((hazard) => ({ hazard, stage: stageOf(hazard.distanceM, hazard.alert.type) }))
+    .map((hazard) => {
+      // 등하교 시간대 가중(hazardStage.ts)은 "아이들이 많은 시간대"가 근거라 어린이보호구역에만 적용한다.
+      // 노인·장애인보호구역은 zoneType 이 있어도 undefined 를 넘겨 가중 없이 기본 거리만 쓰게 한다.
+      const zoneType = hazard.alert.zoneType;
+      const widenableType = !zoneType || zoneType === 'child' ? hazard.alert.type : undefined;
+      return { hazard, stage: stageOf(hazard.distanceM, widenableType) };
+    })
     .filter((c) => !seen.current.has(`${keyOf(c.hazard.alert)}:${c.stage}`))
     .sort((a, b) => RANK[b.stage] - RANK[a.stage] || a.hazard.distanceM - b.hazard.distanceM)[0];
 
@@ -97,7 +103,11 @@ export function useHazardWarning({ active, routeKey, hazards }: Options) {
         distanceM: current.hazard.distanceM,
         stage: current.stage,
         message: {
-          key: `hazard.${current.stage === 'advance' ? 'advance' : 'message'}.${current.hazard.alert.type}`,
+          // 보호구역은 zoneType(child/senior/disabled)별로 다른 문구를 쓴다 - "어린이보호구역"으로
+          // 뭉뚱그리면 노인·장애인보호구역에 틀린 안내가 나간다.
+          key: `hazard.${current.stage === 'advance' ? 'advance' : 'message'}.${
+            current.hazard.alert.zoneType ? `protection_zone_${current.hazard.alert.zoneType}` : current.hazard.alert.type
+          }`,
           params: { distance: formatDistance(current.hazard.distanceM) },
         },
       }

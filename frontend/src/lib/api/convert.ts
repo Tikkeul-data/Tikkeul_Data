@@ -55,14 +55,16 @@ export function incidentsToAlerts(incidents: Incident[], fallbackLocation: strin
 }
 
 /**
- * 어린이보호구역(zone_type: 'child') → 경로 매칭용 RoadAlert.
+ * 보호구역(어린이·노인·장애인) → 경로 매칭용 RoadAlert. zone_type 'unknown'은 어떤 유형인지 알 수 없어 뺀다.
  * 좌표(center)가 없는 구역은 경로에 매칭할 수 없어 뺀다. 방향이 없는 구역 전체 위험이라 omnidirectional 로 표시한다.
+ * type 은 전부 'school_zone'(기존 배지·색·경로 매칭 로직 재사용)으로 두고, 실제 문구는 zoneType 으로 구분한다.
  */
 export function protectionZoneToAlert(zone: ProtectionZone): RoadAlert | null {
-  if (zone.zone_type !== 'child' || !zone.center) return null;
+  if (zone.zone_type === 'unknown' || !zone.center) return null;
   return {
     id: zone.id,
     type: 'school_zone',
+    zoneType: zone.zone_type,
     severity: 'caution',
     location: zone.road_address || zone.lot_address || zone.name,
     description: zone.name,
@@ -74,7 +76,7 @@ export function protectionZoneToAlert(zone: ProtectionZone): RoadAlert | null {
   };
 }
 
-export function childProtectionZonesToAlerts(zones: ProtectionZone[]): RoadAlert[] {
+export function protectionZonesToAlerts(zones: ProtectionZone[]): RoadAlert[] {
   return zones.map(protectionZoneToAlert).filter((a): a is RoadAlert => a !== null);
 }
 

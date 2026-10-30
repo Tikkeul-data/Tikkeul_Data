@@ -5,10 +5,10 @@ import { test } from 'node:test';
 import {
   cautionZoneToAlert,
   cautionZonesToAlerts,
-  childProtectionZonesToAlerts,
   incidentToAlert,
   incidentsToAlerts,
   protectionZoneToAlert,
+  protectionZonesToAlerts,
   sortCautionZones,
   sortProtectionZones,
 } from '../src/lib/api/convert.ts';
@@ -89,11 +89,12 @@ const zone = (over = {}) => ({
   registered_on: null, center: { lat: 37.5, lon: 127.03 }, geometry: null, ...over,
 });
 
-test('어린이보호구역만 경로 매칭용 알림으로 바꾸고, 다른 보호구역·좌표 없는 구역은 뺀다', () => {
-  assert.equal(protectionZoneToAlert(zone({ zone_type: 'senior' })), null);
+test('보호구역(어린이·노인·장애인)을 경로 매칭용 알림으로 바꾸고, 유형 모름·좌표 없는 구역은 뺀다', () => {
+  assert.equal(protectionZoneToAlert(zone({ zone_type: 'unknown' })), null);
   assert.equal(protectionZoneToAlert(zone({ center: null })), null);
   const a = protectionZoneToAlert(zone());
   assert.equal(a.type, 'school_zone');
+  assert.equal(a.zoneType, 'child');
   assert.equal(a.severity, 'caution');
   assert.equal(a.location, '서울특별시 강남구 테헤란로 1');
   assert.equal(a.description, '행복초등학교');
@@ -101,6 +102,10 @@ test('어린이보호구역만 경로 매칭용 알림으로 바꾸고, 다른 �
   assert.equal(a.longitude, 127.03);
   assert.equal(a.omnidirectional, true);
   assert.ok(!('headingDeg' in a), '방향을 만들어 넣지 않는다');
+
+  const senior = protectionZoneToAlert(zone({ zone_type: 'senior' }));
+  assert.equal(senior.type, 'school_zone');
+  assert.equal(senior.zoneType, 'senior');
 });
 
 test('도로명주소가 없으면 지번주소, 둘 다 없으면 시설명을 위치로 쓴다', () => {
@@ -117,9 +122,15 @@ test('어린이보호구역은 방향 없이도(omnidirectional) 경로 위 위�
   assert.ok(MATCH_MAX_LATERAL_M > 0);
 });
 
-test('childProtectionZonesToAlerts: 어린이 외 유형과 좌표 없는 항목은 걸러낸다', () => {
-  const zones = [zone({ id: 'c1' }), zone({ id: 's1', zone_type: 'senior' }), zone({ id: 'c2', center: null })];
-  assert.deepEqual(childProtectionZonesToAlerts(zones).map((a) => a.id), ['c1']);
+test('protectionZonesToAlerts: 유형 모름과 좌표 없는 항목만 걸러내고, 어린이·노인·장애인은 다 남긴다', () => {
+  const zones = [
+    zone({ id: 'c1' }),
+    zone({ id: 's1', zone_type: 'senior' }),
+    zone({ id: 'd1', zone_type: 'disabled' }),
+    zone({ id: 'u1', zone_type: 'unknown' }),
+    zone({ id: 'c2', center: null }),
+  ];
+  assert.deepEqual(protectionZonesToAlerts(zones).map((a) => a.id), ['c1', 's1', 'd1']);
 });
 
 const caution = (over = {}) => ({

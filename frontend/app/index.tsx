@@ -347,11 +347,16 @@ export default function HomeScreen() {
   });
 
   // 어린이보호구역 과속 음성 경고(제한속도 30km/h). 속도를 모르면(liveSpeedKmh null) 경고하지 않는다.
+  // 노인·장애인보호구역은 30km/h가 전국 공통 법정 속도라고 확정할 수 없어 뺀다(지자체 조례로 다를 수 있다).
+  const childZonesOnRoute = useMemo(
+    () => schoolZoneWarning.zoneOnRoute.filter((z) => z.alert.zoneType === 'child'),
+    [schoolZoneWarning.zoneOnRoute],
+  );
   useSpeedingWarning({
     active: !!activeRoute,
     routeKey: schoolZoneRoute?.id ?? '',
     route: schoolZoneRoute,
-    zones: schoolZoneWarning.zoneOnRoute,
+    zones: childZonesOnRoute,
     progressM: liveProgressM,
     speedKmh: liveSpeedKmh,
   });
