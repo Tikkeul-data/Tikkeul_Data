@@ -36,7 +36,7 @@ import { useSpeedingWarning } from '../src/lib/useSpeedingWarning';
 import { useTurnInstructionSpeech } from '../src/lib/useTurnInstructionSpeech';
 import { pickUrgentWarning } from '../src/lib/urgentWarning';
 import { KakaoMap } from '../src/map/KakaoMap';
-import { DEMO_ORIGIN, findDemoDestination } from '../src/map/demoDestinations';
+import { findDemoDestination } from '../src/map/demoDestinations';
 import { getCurrentLocation } from '../src/lib/location/getCurrentLocation';
 import {
   fetchAddress,
@@ -202,7 +202,6 @@ function toStyledRoute(option: TransitRouteOption): StyledRoute {
     instructions: option.instructions.map((text) => ({ text, point: null })),
   };
 }
-
 
 // 검색 실행 버튼. 좁은 화면에서는 아이콘만 보이고, 이름은 접근성 라벨로 남는다.
 function SearchAction({ label, compact, onPress }: { label: string; compact: boolean; onPress: () => void }) {
