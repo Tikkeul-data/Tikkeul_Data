@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
 import { trafficApi } from '../api/api';
-import { childProtectionZonesToAlerts, incidentsToAlerts } from '../api/convert';
+import { incidentsToAlerts, protectionZonesToAlerts } from '../api/convert';
 import { useApi } from '../api/useApi';
 import { areaFor } from '../location/geo';
 import { prioritizeHazards, type PrioritizedHazard } from '../hazardPriority';
@@ -40,7 +40,7 @@ export type HazardDataNotice = 'failed' | 'partial' | null;
 /**
  * 경로 기반 위험 경고. 두 갈래를 한 화면 경고(useHazardWarning)로 합친다.
  *
- * 1) 어린이보호구역(등록 현황): 경로가 지나는 시군구들을 표본 조회한다(useRouteZones). 구역 전체에 적용되는 위험이라
+ * 1) 보호구역(어린이·노인·장애인, 등록 현황): 경로가 지나는 시군구들을 표본 조회한다(useRouteZones). 구역 전체에 적용되는 위험이라
  *    기존 방식(matchHazardsToRoute, omnidirectional)으로 경로 위 여부를 판정한다. 홈과 같은 동작이다.
  * 2) 사고·공사·정체(ITS 돌발정보): classifyIncidentOnRoute 로 confirmed/probable/excluded 를 나누고 우선순위 엔진으로 순위를 매긴다.
  *    기존 단계별 긴급 경고(500·300·100m)에는 confirmed 이면서 urgentEligible 인 것만 넣는다. probable 은 candidates 로만 돌려준다.
@@ -55,7 +55,7 @@ export function useRouteHazardWarning({ route, progressM, active, position = nul
   const zones = useRouteZones(route, isApiRoute);
   const zoneAlerts = useMemo(() => {
     if (route?.source === 'mock') return sampleZoneAlerts ?? [];
-    return zones.status === 'done' ? childProtectionZonesToAlerts(zones.items) : [];
+    return zones.status === 'done' ? protectionZonesToAlerts(zones.items) : [];
   }, [route?.source, sampleZoneAlerts, zones]);
 
   // 경로가 바뀔 때(안내 시작·재탐색)만 새로 만든다. 그래야 위험 데이터와 경로가 그대로인 렌더에서 매칭을 다시 돌리지 않는다.
