@@ -3,7 +3,14 @@ import datetime
 import jwt
 import pytest
 
-from app.auth.security import create_access_token, decode_access_token, hash_password, verify_password
+from app.auth.security import (
+    create_access_token,
+    create_email_verify_token,
+    decode_access_token,
+    decode_email_verify_token,
+    hash_password,
+    verify_password,
+)
 from app.errors import ApiError
 from tests.conftest import make_settings
 
@@ -67,3 +74,25 @@ def test_login_request_normalizes_email_too():
     from app.auth.models import LoginRequest
 
     assert LoginRequest(email=" A@Example.com", password="whatever").email == "a@example.com"
+
+
+def test_email_verify_token_round_trips_user_id():
+    settings = make_settings()
+    token = create_email_verify_token(7, settings)
+    assert decode_email_verify_token(token, settings) == 7
+
+
+def test_access_token_cannot_be_used_as_email_verify_token():
+    settings = make_settings()
+    access = create_access_token(1, settings)
+    with pytest.raises(ApiError) as exc:
+        decode_email_verify_token(access, settings)
+    assert exc.value.code == "UNAUTHORIZED"
+
+
+def test_email_verify_token_cannot_be_used_as_access_token():
+    settings = make_settings()
+    verify = create_email_verify_token(1, settings)
+    with pytest.raises(ApiError) as exc:
+        decode_access_token(verify, settings)
+    assert exc.value.code == "UNAUTHORIZED"

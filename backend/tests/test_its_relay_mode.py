@@ -204,4 +204,6 @@ def test_relay_token_never_appears_in_logs_or_responses(make_client, caplog):
 
 def test_health_response_is_unchanged_and_hides_relay_settings(make_client):
     body = make_client(Recorder(ok(EVENT_ITEMS)), make_settings(**RELAY)).get("/api/health").json()
-    assert set(body) == {"status", "configured"} and set(body["configured"]) == set(KEYS)
+    # resend_api_key 는 KEYS(기본 테스트 설정)에 없다 - 기본값으로 두어야 signup 이 백그라운드에서
+    # 진짜 네트워크로 인증메일을 보내려 하지 않는다(다른 테스트 전부에 영향을 준다).
+    assert set(body) == {"status", "configured"} and set(body["configured"]) == set(KEYS) | {"resend_api_key"}
