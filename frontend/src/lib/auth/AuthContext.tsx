@@ -12,7 +12,7 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string, verifyToken: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -49,8 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: 'authenticated', user: res.user, token: res.access_token });
   };
 
-  const signup = async (email: string, password: string) => {
-    const res = await authApi.signup(email, password);
+  const signup = async (email: string, password: string, verifyToken: string) => {
+    const res = await authApi.signup(email, password, verifyToken);
     await setToken(res.access_token);
     setState({ status: 'authenticated', user: res.user, token: res.access_token });
   };

@@ -40,6 +40,8 @@ def _validate_password(v: str) -> str:
 class SignupRequest(SQLModel):
     email: str
     password: str
+    # /api/auth/signup/verify-code 에서 받은 토큰. 가입 직전에 이 이메일이 인증됐다는 증거다.
+    verify_token: str
 
     @field_validator("email")
     @classmethod
@@ -81,3 +83,35 @@ class EmailAvailability(SQLModel):
 
 class SendVerificationResponse(SQLModel):
     sent: bool
+
+
+class SignupCodeRequest(SQLModel):
+    email: str
+
+    @field_validator("email")
+    @classmethod
+    def _check_email(cls, v: str) -> str:
+        return normalize_email(v)
+
+
+class SignupCodeSentResponse(SQLModel):
+    sent: bool
+    # 다음 요청(verify-code)에 그대로 실어 보내는 서명된 챌린지. 코드 자체는 들어있지 않다(HMAC만).
+    challenge: str
+
+
+class SignupCodeVerifyRequest(SQLModel):
+    email: str
+    code: str
+    challenge: str
+
+    @field_validator("email")
+    @classmethod
+    def _check_email(cls, v: str) -> str:
+        return normalize_email(v)
+
+
+class SignupCodeVerifyResponse(SQLModel):
+    verified: bool
+    # 가입 요청(SignupRequest.verify_token)에 그대로 실어 보내는, "이 이메일은 확인됨" 토큰.
+    token: str

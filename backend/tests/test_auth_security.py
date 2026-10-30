@@ -62,12 +62,12 @@ def test_token_functions_raise_not_configured_without_jwt_secret():
 def test_signup_request_normalizes_email_and_checks_password_length():
     from app.auth.models import SignupRequest
 
-    req = SignupRequest(email="  A@Example.com ", password="password123")
+    req = SignupRequest(email="  A@Example.com ", password="password123", verify_token="x")
     assert req.email == "a@example.com"
     with pytest.raises(Exception):
-        SignupRequest(email="a@example.com", password="short")
+        SignupRequest(email="a@example.com", password="short", verify_token="x")
     with pytest.raises(Exception):
-        SignupRequest(email="a@example.com", password="x" * 100)
+        SignupRequest(email="a@example.com", password="x" * 100, verify_token="x")
 
 
 def test_login_request_normalizes_email_too():

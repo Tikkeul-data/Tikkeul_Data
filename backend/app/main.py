@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.auth.rate_limit import ResendCooldown
+from app.auth.rate_limit import AttemptLimiter, ResendCooldown
 from app.auth.router import router as auth_router
 from app.cache import TtlCache
 from app.config import Settings, get_settings
@@ -50,6 +50,8 @@ def create_app(
         app.state.settings = settings
         app.state.db_engine = make_engine(settings)
         app.state.resend_cooldown = ResendCooldown()
+        app.state.signup_code_cooldown = ResendCooldown(cooldown_s=30.0)
+        app.state.signup_code_attempts = AttemptLimiter(max_attempts=5, window_s=settings.signup_code_expires_minutes * 60.0)
         create_db_and_tables(app.state.db_engine)
         yield
         if http_client is None:
