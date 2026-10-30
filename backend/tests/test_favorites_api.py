@@ -1,5 +1,10 @@
 def _signup_and_token(client, email="a@example.com"):
-    res = client.post("/api/auth/signup", json={"email": email, "password": "password123"})
+    from app.auth.models import normalize_email
+    from app.auth.security import create_signup_verified_token
+
+    settings = client.app.state.settings
+    verify_token = create_signup_verified_token(normalize_email(email), settings)
+    res = client.post("/api/auth/signup", json={"email": email, "password": "password123", "verify_token": verify_token})
     return res.json()["access_token"]
 
 

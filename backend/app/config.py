@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     resend_api_key: Optional[SecretStr] = None
     resend_from_email: str = "onboarding@resend.dev"
     email_verify_expires_hours: int = 24
+    # 가입 전 이메일 인증번호(6자리) 유효시간과, 인증 성공 뒤 "이 이메일은 확인됨" 토큰의 유효시간(그 사이에 가입을 끝내야 한다).
+    signup_code_expires_minutes: int = 10
+    signup_verified_expires_minutes: int = 30
     # 인증메일의 "인증하기" 링크가 가리킬 이 백엔드 자신의 공개 주소(프런트엔드 주소 아님).
     # 운영에서는 Render 서비스의 실제 URL로 덮어써야 한다 - 안 그러면 메일 링크가 localhost를 가리킨다.
     api_base_url: str = "http://localhost:8000"

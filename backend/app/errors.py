@@ -26,7 +26,9 @@ _ERRORS: Dict[str, Tuple[int, str]] = {
     "UNAUTHORIZED": (401, "로그인이 필요합니다."),
     "EMAIL_ALREADY_VERIFIED": (409, "이미 인증된 이메일입니다."),
     "EMAIL_SEND_FAILED": (502, "인증 메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요."),
-    "TOO_MANY_REQUESTS": (429, "인증 메일은 잠시 후에 다시 보낼 수 있습니다."),
+    "TOO_MANY_REQUESTS": (429, "잠시 후에 다시 시도해 주세요."),
+    "INVALID_CODE": (400, "인증번호가 올바르지 않거나 만료됐습니다."),
+    "EMAIL_NOT_VERIFIED": (400, "이메일 인증을 먼저 완료해 주세요."),
     "FAVORITE_NOT_FOUND": (404, "즐겨찾기를 찾을 수 없습니다."),
     "FAVORITE_KIND_TAKEN": (409, "집/회사는 하나만 등록할 수 있습니다. 기존 항목을 수정해 주세요."),
 }

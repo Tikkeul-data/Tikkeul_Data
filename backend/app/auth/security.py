@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -56,3 +59,55 @@ def decode_email_verify_token(token: str, settings: Settings) -> int:
     if payload.get("purpose") != "verify_email":
         raise api_error("UNAUTHORIZED")
     return int(payload["sub"])
+
+
+# ── 가입 전 이메일 인증번호(6자리) ──────────────────────────────────────────
+# 서버는 코드를 저장하지 않는다(워커·재시작에 무관하게 동작하도록). 대신 코드의 HMAC(비밀키로 서명)만
+# JWT(challenge)에 담아 프런트엔드에 돌려주고, 프런트는 그걸 그대로 들고 있다가 코드 확인 때 같이 보낸다.
+# HMAC(평문 해시가 아니라)을 쓰는 이유: 공격자가 challenge 를 가로채도 서버 비밀키 없이는 코드를 거꾸로 못 구한다.
+
+
+def generate_signup_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def _code_hmac(code: str, secret: str) -> str:
+    return hmac.new(secret.encode("utf-8"), code.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def create_signup_code_token(email: str, code: str, settings: Settings) -> str:
+    secret = _require_secret(settings)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.signup_code_expires_minutes)
+    payload = {"email": email, "code_hash": _code_hmac(code, secret), "purpose": "signup_code", "exp": expires_at}
+    return jwt.encode(payload, secret, algorithm=settings.jwt_algorithm)
+
+
+def verify_signup_code(challenge: str, email: str, code: str, settings: Settings) -> None:
+    """challenge·code 가 email 에 대해 유효하면 조용히 통과, 아니면 INVALID_CODE."""
+    secret = _require_secret(settings)
+    try:
+        payload = jwt.decode(challenge, secret, algorithms=[settings.jwt_algorithm])
+    except jwt.PyJWTError:
+        raise api_error("INVALID_CODE")
+    if payload.get("purpose") != "signup_code" or payload.get("email") != email:
+        raise api_error("INVALID_CODE")
+    if not hmac.compare_digest(_code_hmac(code, secret), payload.get("code_hash", "")):
+        raise api_error("INVALID_CODE")
+
+
+def create_signup_verified_token(email: str, settings: Settings) -> str:
+    secret = _require_secret(settings)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.signup_verified_expires_minutes)
+    payload = {"email": email, "purpose": "signup_verified", "exp": expires_at}
+    return jwt.encode(payload, secret, algorithm=settings.jwt_algorithm)
+
+
+def check_signup_verified(token: str, email: str, settings: Settings) -> None:
+    """가입 요청에 실린 verify_token 이 이 email 에 대해 유효한 인증 완료 토큰인지 확인한다."""
+    secret = _require_secret(settings)
+    try:
+        payload = jwt.decode(token, secret, algorithms=[settings.jwt_algorithm])
+    except jwt.PyJWTError:
+        raise api_error("EMAIL_NOT_VERIFIED")
+    if payload.get("purpose") != "signup_verified" or payload.get("email") != email:
+        raise api_error("EMAIL_NOT_VERIFIED")
