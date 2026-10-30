@@ -34,5 +34,7 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
     # TBD: 로그인 데이터(backend/data/tikkeul.db, SQLite)는 영구 디스크가 있어야 재배포 후에도 남는다.
     # 무료/스타터 플랜은 기본적으로 디스크가 재배포 시 초기화될 수 있다 - 배포 전 Render 플랜 확인 필요(docs/AUTH_DESIGN.md 4절).

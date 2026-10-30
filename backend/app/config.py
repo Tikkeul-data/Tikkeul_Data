@@ -49,8 +49,16 @@ class Settings(BaseSettings):
     jwt_secret: Optional[SecretStr] = None
     jwt_algorithm: str = "HS256"
     jwt_expires_days: int = 14
-    # 로그인·즐겨찾기·최근목적지용 SQLite 파일. backend/data/ 는 .gitignore 대상이고 speed_bumps.db 와 같은 디렉터리다.
+    # 로그인·즐겨찾기·최근목적지용 SQLite 파일. backend/data/ 는 .gitignore 대상이고 speed_bumps.db 는 같은 디렉터리다.
     database_url: str = f"sqlite:///{BACKEND_DIR / 'data' / 'tikkeul.db'}"
+
+    # 가입 시 이메일 인증 메일 발송(Resend). 없으면 가입은 그대로 되고 메일만 조용히 건너뛴다(미인증 상태로 남는다).
+    resend_api_key: Optional[SecretStr] = None
+    resend_from_email: str = "onboarding@resend.dev"
+    email_verify_expires_hours: int = 24
+    # 인증메일의 "인증하기" 링크가 가리킬 이 백엔드 자신의 공개 주소(프런트엔드 주소 아님).
+    # 운영에서는 Render 서비스의 실제 URL로 덮어써야 한다 - 안 그러면 메일 링크가 localhost를 가리킨다.
+    api_base_url: str = "http://localhost:8000"
 
     def secret(self, name: str) -> Optional[str]:
         value = getattr(self, name)

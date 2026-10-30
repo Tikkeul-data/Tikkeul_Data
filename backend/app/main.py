@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.auth.rate_limit import ResendCooldown
 from app.auth.router import router as auth_router
 from app.cache import TtlCache
 from app.config import Settings, get_settings
@@ -26,6 +27,7 @@ _KEY_NAMES = [
     "protection_zone_service_key",
     "kakao_rest_api_key",
     "jwt_secret",
+    "resend_api_key",
 ]
 
 
@@ -46,6 +48,7 @@ def create_app(
         app.state.service = TrafficService(Upstream(client, settings), settings, cache or TtlCache())
         app.state.settings = settings
         app.state.db_engine = make_engine(settings)
+        app.state.resend_cooldown = ResendCooldown()
         create_db_and_tables(app.state.db_engine)
         yield
         if http_client is None:

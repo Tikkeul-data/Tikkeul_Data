@@ -1,11 +1,14 @@
 import { Check, Heart, House, LogOut, Map as MapIcon, TriangleAlert, User, X, type LucideIcon } from 'lucide-react-native';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { LANGUAGES, type Language } from '../../i18n';
+import { authApi } from '../../lib/auth/api';
 import { useAuth } from '../../lib/auth/AuthContext';
+import { authErrorMessage } from '../../lib/auth/errorMessage';
 import { MAX_CONTENT_WIDTH, colors, radius, shadow, space } from '../../theme';
 import { Chip } from './Chip';
 import { Icon } from './Icon';
@@ -30,7 +33,22 @@ export function MenuSheet({ visible, onClose }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { status, user, logout } = useAuth();
+  const { status, user, token, logout } = useAuth();
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [resendError, setResendError] = useState<string | null>(null);
+
+  const onResendVerification = async () => {
+    if (!token) return;
+    setResendState('sending');
+    setResendError(null);
+    try {
+      await authApi.sendVerification(token);
+      setResendState('sent');
+    } catch (e) {
+      setResendState('error');
+      setResendError(authErrorMessage(e, t));
+    }
+  };
 
   const goTo = (href: (typeof PAGES)[number]['href']) => {
     onClose();
@@ -101,6 +119,30 @@ export function MenuSheet({ visible, onClose }: Props) {
                     {user.email}
                   </Text>
                 </View>
+                {user.email_verified ? (
+                  <Text style={styles.verifiedText}>{t('auth.emailVerified')}</Text>
+                ) : (
+                  <View style={styles.verifyRow}>
+                    <Text style={styles.unverifiedText}>{t('auth.emailNotVerified')}</Text>
+                    {resendState === 'sent' ? (
+                      <Text style={styles.verificationSentText}>{t('auth.verificationSent')}</Text>
+                    ) : (
+                      <Pressable
+                        onPress={onResendVerification}
+                        disabled={resendState === 'sending'}
+                        accessibilityRole="button"
+                        style={({ pressed }) => [styles.resendButton, pressed && styles.pressed]}
+                      >
+                        {resendState === 'sending' ? (
+                          <ActivityIndicator size="small" color={colors.brand} />
+                        ) : (
+                          <Text style={styles.resendButtonText}>{t('auth.resendVerification')}</Text>
+                        )}
+                      </Pressable>
+                    )}
+                  </View>
+                )}
+                {resendState === 'error' && resendError && <Text style={styles.resendErrorText}>{resendError}</Text>}
                 <Pressable
                   onPress={goToFavorites}
                   accessibilityRole="menuitem"
@@ -195,4 +237,17 @@ const styles = StyleSheet.create({
   accountEmail: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.muted },
   logoutText: { color: colors.dangerInk },
   loginText: { fontWeight: '800', color: colors.brand },
+  verifiedText: { fontSize: 12, color: colors.muted, paddingHorizontal: space.md },
+  verifyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space.sm,
+    paddingHorizontal: space.md,
+  },
+  unverifiedText: { flex: 1, fontSize: 12, color: colors.dangerInk, fontWeight: '600' },
+  verificationSentText: { fontSize: 12, color: colors.muted, fontWeight: '600' },
+  resendButton: { paddingVertical: space.xs, paddingHorizontal: space.sm, borderRadius: radius.pill, backgroundColor: colors.primarySoft },
+  resendButtonText: { fontSize: 12, fontWeight: '800', color: colors.brand },
+  resendErrorText: { fontSize: 12, color: colors.dangerInk, paddingHorizontal: space.md },
 });

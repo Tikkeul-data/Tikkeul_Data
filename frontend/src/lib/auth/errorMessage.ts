@@ -7,6 +7,10 @@ export function authErrorMessage(error: unknown, t: TFunction): string {
   if (error instanceof ApiClientError) {
     if (error.code === 'EMAIL_TAKEN') return t('auth.emailTaken');
     if (error.code === 'INVALID_CREDENTIALS') return t('auth.loginFailed');
+    if (error.code === 'EMAIL_ALREADY_VERIFIED') return t('auth.alreadyVerified');
+    if (error.code === 'EMAIL_SEND_FAILED') return t('auth.verificationSendFailed');
+    if (error.code === 'TOO_MANY_REQUESTS') return t('auth.verificationTooSoon');
+    if (error.kind === 'notConfigured') return t('auth.verificationNotConfigured');
     if (error.kind === 'invalid') return t('auth.emailInvalid');
     if (error.kind === 'network' || error.kind === 'timeout') return t('auth.networkError');
   }
