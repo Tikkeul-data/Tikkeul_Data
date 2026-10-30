@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     # 쉼표로 구분한 허용 출처. 비우면 DEFAULT_CORS_ORIGINS
     cors_allow_origins: str = ""
 
+    # 로그인용 서명 비밀키. 다른 인증키들과 같은 패턴 - 없으면 가입/로그인 시점에 NOT_CONFIGURED 오류를 낸다.
+    jwt_secret: Optional[SecretStr] = None
+    jwt_algorithm: str = "HS256"
+    jwt_expires_days: int = 14
+    # 로그인·즐겨찾기·최근목적지용 SQLite 파일. backend/data/ 는 .gitignore 대상이고 speed_bumps.db 와 같은 디렉터리다.
+    database_url: str = f"sqlite:///{BACKEND_DIR / 'data' / 'tikkeul.db'}"
+
     def secret(self, name: str) -> Optional[str]:
         value = getattr(self, name)
         text = value.get_secret_value().strip() if value is not None else ""

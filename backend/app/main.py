@@ -7,8 +7,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.auth.router import router as auth_router
 from app.cache import TtlCache
 from app.config import Settings, get_settings
+from app.db import create_db_and_tables, make_engine
 from app.errors import ApiError
 from app.navigation.routers import geocode_router, router as navigation_router
 from app.routers import geo, traffic
@@ -22,6 +24,7 @@ _KEY_NAMES = [
     "its_caution_api_key",
     "protection_zone_service_key",
     "kakao_rest_api_key",
+    "jwt_secret",
 ]
 
 
@@ -40,6 +43,9 @@ def create_app(
     async def lifespan(app: FastAPI):
         client = http_client or httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_s, connect=5.0))
         app.state.service = TrafficService(Upstream(client, settings), settings, cache or TtlCache())
+        app.state.settings = settings
+        app.state.db_engine = make_engine(settings)
+        create_db_and_tables(app.state.db_engine)
         yield
         if http_client is None:
             await client.aclose()
@@ -67,6 +73,7 @@ def create_app(
     app.include_router(geo.router)
     app.include_router(navigation_router)
     app.include_router(geocode_router)
+    app.include_router(auth_router)
     return app
 
 

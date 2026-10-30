@@ -54,3 +54,7 @@ erDiagram
 - DB 사용 여부와 종류
 - 관측 이벤트 보관 기간·삭제 정책
 - 이벤트 위치의 익명화·정밀도 처리 방식
+
+## 참고
+
+로그인 사용자용 데이터(User·FavoritePlace·Trip)는 이 문서의 범위가 아니다. [AUTH_DESIGN](AUTH_DESIGN.md)에서 별도로 다룬다.
