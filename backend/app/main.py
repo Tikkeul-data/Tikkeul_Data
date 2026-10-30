@@ -7,11 +7,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.auth.rate_limit import ResendCooldown
 from app.auth.router import router as auth_router
 from app.cache import TtlCache
 from app.config import Settings, get_settings
 from app.db import create_db_and_tables, make_engine
 from app.errors import ApiError
+from app.favorites.router import router as favorites_router
 from app.navigation.routers import geocode_router, router as navigation_router
 from app.routers import geo, traffic
 from app.service import TrafficService
@@ -26,6 +28,7 @@ _KEY_NAMES = [
     "protection_zone_service_key",
     "kakao_rest_api_key",
     "jwt_secret",
+    "resend_api_key",
 ]
 
 
@@ -46,6 +49,7 @@ def create_app(
         app.state.service = TrafficService(Upstream(client, settings), settings, cache or TtlCache())
         app.state.settings = settings
         app.state.db_engine = make_engine(settings)
+        app.state.resend_cooldown = ResendCooldown()
         create_db_and_tables(app.state.db_engine)
         yield
         if http_client is None:
@@ -53,7 +57,7 @@ def create_app(
 
     app = FastAPI(title="티끌모아Data API", version="0.1.0", lifespan=lifespan)
     app.add_middleware(
-        CORSMiddleware, allow_origins=settings.cors_origins(), allow_methods=["GET", "POST"], allow_headers=["*"]
+        CORSMiddleware, allow_origins=settings.cors_origins(), allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["*"]
     )
 
     @app.exception_handler(ApiError)
@@ -75,7 +79,11 @@ def create_app(
     app.include_router(navigation_router)
     app.include_router(geocode_router)
     app.include_router(auth_router)
+
     app.include_router(trips_router)
+
+    app.include_router(favorites_router)
+
     return app
 
 

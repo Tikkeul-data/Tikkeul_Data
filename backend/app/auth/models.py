@@ -13,10 +13,11 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(index=True, unique=True)
     password_hash: str
+    email_verified: bool = Field(default=False)
     created_at: datetime = Field(default_factory=_utcnow)
 
 
-def _normalize_email(v: str) -> str:
+def normalize_email(v: str) -> str:
     v = v.strip().lower()
     if "@" not in v or len(v) < 3:
         raise ValueError("올바른 이메일 형식이 아닙니다.")
@@ -43,7 +44,7 @@ class SignupRequest(SQLModel):
     @field_validator("email")
     @classmethod
     def _check_email(cls, v: str) -> str:
-        return _normalize_email(v)
+        return normalize_email(v)
 
     @field_validator("password")
     @classmethod
@@ -58,12 +59,13 @@ class LoginRequest(SQLModel):
     @field_validator("email")
     @classmethod
     def _check_email(cls, v: str) -> str:
-        return _normalize_email(v)
+        return normalize_email(v)
 
 
 class UserPublic(SQLModel):
     id: int
     email: str
+    email_verified: bool
     created_at: datetime
 
 
@@ -71,3 +73,11 @@ class TokenResponse(SQLModel):
     access_token: str
     token_type: str = "bearer"
     user: UserPublic
+
+
+class EmailAvailability(SQLModel):
+    available: bool
+
+
+class SendVerificationResponse(SQLModel):
+    sent: bool

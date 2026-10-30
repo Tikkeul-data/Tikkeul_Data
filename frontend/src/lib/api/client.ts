@@ -10,7 +10,8 @@ export type ApiErrorKind =
   | 'rateLimit' // 공공 API 사용량 제한
   | 'server' // 그 밖의 서버·공공 API 오류, 응답 해석 실패
   | 'invalid' // 요청 값 오류(422)
-  | 'regionNotFound'; // 좌표의 시군구를 확인할 수 없음(국내 위치가 아닐 수 있음)
+  | 'regionNotFound' // 좌표의 시군구를 확인할 수 없음(국내 위치가 아닐 수 있음)
+  | 'unauthorized'; // 로그인이 필요하거나 토큰이 유효하지 않음
 
 export class ApiClientError extends Error {
   kind: ApiErrorKind;
@@ -40,6 +41,7 @@ const CODE_TO_KIND: Record<string, ApiErrorKind> = {
   UPSTREAM_BAD_RESPONSE: 'server',
   UPSTREAM_ERROR: 'server',
   REGION_NOT_FOUND: 'regionNotFound',
+  UNAUTHORIZED: 'unauthorized',
 };
 
 /** 오류 HTTP 응답을 화면용 종류로 분류한다. 백엔드 오류 형식은 { error: { code } } 이다. */
@@ -62,6 +64,8 @@ export function buildQuery(params: Record<string, QueryValue>): string {
 export interface RequestOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** 있으면 Authorization: Bearer <token> 헤더를 붙인다(로그인 필요한 호출용). */
+  token?: string;
 }
 
 export interface ApiClientConfig {
@@ -72,10 +76,13 @@ export interface ApiClientConfig {
 }
 
 export function createApiClient({ baseUrl, fetchImpl, timeoutMs: defaultTimeoutMs = 20000 }: ApiClientConfig) {
-  async function get<T>(path: string, params: Record<string, QueryValue> = {}, options: RequestOptions = {}): Promise<T> {
+  async function request<T>(
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+    path: string,
+    { query = '', jsonBody, options = {} }: { query?: string; jsonBody?: unknown; options?: RequestOptions },
+  ): Promise<T> {
     if (!baseUrl) throw new ApiClientError('config');
     const doFetch = fetchImpl ?? fetch;
-    const query = buildQuery(params);
     const url = `${baseUrl.replace(/\/+$/, '')}${path}${query ? `?${query}` : ''}`;
 
     const controller = new AbortController();
@@ -90,10 +97,24 @@ export function createApiClient({ baseUrl, fetchImpl, timeoutMs: defaultTimeoutM
     try {
       let response: Response;
       try {
-        response = await doFetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+        const headers: Record<string, string> = { Accept: 'application/json' };
+        if (jsonBody !== undefined) headers['Content-Type'] = 'application/json';
+        if (options.token) headers.Authorization = `Bearer ${options.token}`;
+        response = await doFetch(url, {
+          method,
+          signal: controller.signal,
+          headers,
+          body: jsonBody !== undefined ? JSON.stringify(jsonBody) : undefined,
+        });
       } catch (error) {
         if (options.signal?.aborted) throw error; // 호출한 쪽이 취소한 것(화면 이동 등). 오류로 보지 않는다
         throw new ApiClientError(timedOut ? 'timeout' : 'network');
+      }
+
+      // 204 No Content(예: 즐겨찾기 삭제)는 본문이 없다 - json() 을 시도하면 그 자체로 오류다.
+      if (response.status === 204) {
+        if (!response.ok) throw classifyHttpError(response.status, null);
+        return undefined as T;
       }
 
       let body: unknown;
@@ -113,5 +134,11 @@ export function createApiClient({ baseUrl, fetchImpl, timeoutMs: defaultTimeoutM
     }
   }
 
-  return { get };
+  return {
+    get: <T>(path: string, params: Record<string, QueryValue> = {}, options: RequestOptions = {}) =>
+      request<T>('GET', path, { query: buildQuery(params), options }),
+    post: <T>(path: string, jsonBody: unknown = {}, options: RequestOptions = {}) => request<T>('POST', path, { jsonBody, options }),
+    patch: <T>(path: string, jsonBody: unknown = {}, options: RequestOptions = {}) => request<T>('PATCH', path, { jsonBody, options }),
+    del: <T>(path: string, options: RequestOptions = {}) => request<T>('DELETE', path, { options }),
+  };
 }

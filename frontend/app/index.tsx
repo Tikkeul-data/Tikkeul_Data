@@ -37,6 +37,7 @@ import { useTurnInstructionSpeech } from '../src/lib/useTurnInstructionSpeech';
 import { pickUrgentWarning } from '../src/lib/urgentWarning';
 import { KakaoMap } from '../src/map/KakaoMap';
 import { DEMO_ORIGIN, findDemoDestination } from '../src/map/demoDestinations';
+import { getCurrentLocation } from '../src/lib/location/getCurrentLocation';
 import {
   fetchAddress,
   fetchModeRoute,
@@ -202,21 +203,6 @@ function toStyledRoute(option: TransitRouteOption): StyledRoute {
   };
 }
 
-// shortcut: 출발지는 항상 브라우저 GPS(실패 시 서울시청)로 고정한다. 출발지 직접 텍스트 입력(geocoding)은 없음 —
-// 대신 지도를 클릭해서 출발지로 지정할 수 있다.
-function getCurrentLocation(): Promise<RoutePoint> {
-  return new Promise((resolve) => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      resolve(DEMO_ORIGIN);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => resolve({ lat: coords.latitude, lng: coords.longitude }),
-      () => resolve(DEMO_ORIGIN),
-      { timeout: 8000, maximumAge: 60000 },
-    );
-  });
-}
 
 // 검색 실행 버튼. 좁은 화면에서는 아이콘만 보이고, 이름은 접근성 라벨로 남는다.
 function SearchAction({ label, compact, onPress }: { label: string; compact: boolean; onPress: () => void }) {
@@ -545,7 +531,8 @@ export default function HomeScreen() {
     destinationInputRef.current?.focus();
   };
 
-  // 지도에서 고른 위치를 도착지로 지정하고, 그 자리에서 바로 추천 경로로 안내를 시작한다.
+  // 지도에서 고른 위치를 도착지로 지정하고, 검색 결과(경로 스타일 선택지)를 보여준다.
+  // 텍스트로 검색했을 때와 똑같이 여기서 바로 안내를 시작하지 않는다 - 이동수단·경로를 고르는 건 사용자 몫이다.
   const onPickDestination = async () => {
     if (!pickedPoint) return;
     const destinationPoint = pickedPoint;
@@ -553,9 +540,7 @@ export default function HomeScreen() {
     setManualDestination(destinationPoint);
     setDestination(label);
     setPickedPoint(null);
-    const results = await searchRoutes(destinationPoint, label, mode);
-    const recommended = results?.find((r) => r.style === 'recommended') ?? results?.[0];
-    if (recommended) onStartGuidance(recommended);
+    await searchRoutes(destinationPoint, label, mode);
   };
 
   // 위험 경고: 시트가 있으면 그 높이만큼 위로 올린다. 시트를 크게 펼쳐도 경고 카드(닫기 버튼 포함)가 화면 위로 잘리지 않게
