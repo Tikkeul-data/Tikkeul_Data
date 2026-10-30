@@ -8,6 +8,7 @@ KEYS = {
     "its_caution_api_key": "SECRET-CAUTION-KEY",
     "protection_zone_service_key": "SECRET-ZONE-KEY",
     "kakao_rest_api_key": "SECRET-KAKAO-KEY",
+    "jwt_secret": "test-jwt-secret-key",
 }
 
 EVENT_ITEMS: List[Dict[str, Any]] = [
