@@ -17,6 +17,7 @@ from app.favorites.router import router as favorites_router
 from app.navigation.routers import geocode_router, router as navigation_router
 from app.routers import geo, traffic
 from app.service import TrafficService
+from app.trips.router import router as trips_router
 from app.upstream import Upstream
 
 _KEY_NAMES = [
@@ -78,7 +79,11 @@ def create_app(
     app.include_router(navigation_router)
     app.include_router(geocode_router)
     app.include_router(auth_router)
+
+    app.include_router(trips_router)
+
     app.include_router(favorites_router)
+
     return app
 
 
