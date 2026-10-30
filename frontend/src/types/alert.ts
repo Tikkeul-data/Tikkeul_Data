@@ -22,6 +22,8 @@ export interface RoadAlert {
   /** 위험 위치. 경로 매칭(src/lib/routeHazards.ts)과 추후 지도 마커에 쓴다. */
   latitude: number;
   longitude: number;
+  /** 보호구역 세부 유형(어린이/노인/장애인). type 이 'school_zone' 인 보호구역 알림에만 있다. */
+  zoneType?: 'child' | 'senior' | 'disabled';
   /** true 면 카드에 "예시 데이터" 태그를 보여 실시간 정보로 오인되지 않게 한다. */
   isSample?: boolean;
 
