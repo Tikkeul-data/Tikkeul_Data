@@ -118,6 +118,9 @@ export function NavigationMap({ ref, onReady, onUserPan }: Props) {
     },
     panTo: (point, options) => mapRef.current?.easeTo({ center: [point.lng, point.lat], zoom: options?.level ? 18.6 : undefined, duration: 180 }),
     followTo,
+    // shortcut: 길안내 화면은 카테고리 주변 검색을 쓰지 않는다. 인터페이스를 맞추기 위한 빈 구현.
+    showPlaces: () => {},
+    clearPlaces: () => {},
     moveToMyLocation: () => {
       const last = lastFollowRef.current;
       if (last) followTo(last.point, last.options);

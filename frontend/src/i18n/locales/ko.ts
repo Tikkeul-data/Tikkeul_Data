@@ -1,5 +1,5 @@
 const ko = {
-  tabs: { home: '홈', map: '지도·경로', alerts: '위험 알림' },
+  tabs: { home: '홈', map: '지도·경로', alerts: '위험 알림', transit: '대중교통', navigate: '네비게이션', saved: '저장' },
   common: {
     close: '닫기',
     updatedAt: '갱신 {{time}}',
@@ -323,10 +323,35 @@ const ko = {
     kindTaken: '집/회사는 하나만 등록할 수 있어요. 기존 항목을 수정해 주세요',
     label: '이름',
     labelPlaceholder: '예: 단골 카페',
+    locationSearch: '위치 검색',
+    locationSearchPlaceholder: '주소나 장소 이름으로 검색',
+    useCurrentLocation: '현재 위치 사용',
+    locationPicked: '위치가 선택됐어요',
     save: '저장',
     delete: '삭제',
     deleteConfirmTitle: '즐겨찾기를 삭제할까요?',
     loadFailed: '즐겨찾기를 불러오지 못했어요',
+  },
+  places: {
+    restaurant: '음식점',
+    cafe: '카페',
+    convenience: '편의점',
+    hair: '헤어샵',
+    gas: '주유소',
+    parking: '주차장',
+    pharmacy: '약국',
+    mart: '마트',
+    nearbyTitle: '내 주변 {{category}}',
+    empty: '주변에 결과가 없어요',
+    error: '주변 장소를 불러오지 못했어요',
+    distanceM: '{{n}}m',
+  },
+  transitTab: {
+    title: '대중교통',
+    navTitle: '네비게이션',
+    favoriteRoutes: '즐겨찾기 경로',
+    recentDestinations: '최근 목적지',
+    empty: '저장된 장소나 최근 목적지가 없어요',
   },
 };
 

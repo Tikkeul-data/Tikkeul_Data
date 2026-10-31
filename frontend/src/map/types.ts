@@ -20,6 +20,10 @@ export interface KakaoMapHandle {
   clearRoute: () => void;
   /** 도착 지점 표시를 둔다. null 이면 지운다 */
   setDestination: (point: RoutePoint | null) => void;
+  /** 카테고리 주변 검색 결과를 색이 있는 점으로 지도에 뿌린다. 다시 부르면 이전 점들을 지우고 새로 그린다 */
+  showPlaces: (places: { point: RoutePoint; label: string }[], color: string) => void;
+  /** showPlaces 로 뿌린 점을 모두 지운다 */
+  clearPlaces: () => void;
   /** 현재 위치를 옮긴다. null 이면 지운다. 지도 중심은 옮기지 않는다. headingDeg 가 숫자면 그 방향을 가리키는 화살표로, 아니면 점으로 보인다 */
   setLocationMarker: (point: RoutePoint | null, options?: { headingDeg?: number | null; preview?: boolean }) => void;
   /** 지도 중심을 옮긴다. level 을 주면 확대 수준도 바꾼다(카카오 level: 작을수록 확대) */

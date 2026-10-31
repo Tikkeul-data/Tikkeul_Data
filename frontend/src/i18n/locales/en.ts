@@ -1,7 +1,7 @@
 import type { Resources } from './ko';
 
 const en: Resources = {
-  tabs: { home: 'Home', map: 'Map & route', alerts: 'Alerts' },
+  tabs: { home: 'Home', map: 'Map & route', alerts: 'Alerts', transit: 'Transit', navigate: 'Navigate', saved: 'Saved' },
   common: {
     close: 'Close',
     updatedAt: 'Updated {{time}}',
@@ -325,10 +325,35 @@ const en: Resources = {
     kindTaken: 'You can only have one Home/Work. Edit the existing one instead.',
     label: 'Name',
     labelPlaceholder: 'e.g. Favorite cafe',
+    locationSearch: 'Search location',
+    locationSearchPlaceholder: 'Search by address or place name',
+    useCurrentLocation: 'Use current location',
+    locationPicked: 'Location selected',
     save: 'Save',
     delete: 'Delete',
     deleteConfirmTitle: 'Delete this favorite?',
     loadFailed: 'Could not load favorites',
+  },
+  places: {
+    restaurant: 'Restaurants',
+    cafe: 'Cafes',
+    convenience: 'Convenience',
+    hair: 'Hair salons',
+    gas: 'Gas stations',
+    parking: 'Parking',
+    pharmacy: 'Pharmacy',
+    mart: 'Mart',
+    nearbyTitle: 'Nearby {{category}}',
+    empty: 'No nearby results',
+    error: 'Could not load nearby places',
+    distanceM: '{{n}}m',
+  },
+  transitTab: {
+    title: 'Transit',
+    navTitle: 'Navigate',
+    favoriteRoutes: 'Favorite routes',
+    recentDestinations: 'Recent destinations',
+    empty: 'No saved places or recent destinations',
   },
 };
 

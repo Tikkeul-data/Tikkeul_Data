@@ -1,7 +1,7 @@
 import type { Resources } from './ko';
 
 const zh: Resources = {
-  tabs: { home: '首页', map: '地图·路线', alerts: '风险提醒' },
+  tabs: { home: '首页', map: '地图·路线', alerts: '风险提醒', transit: '公共交通', navigate: '导航', saved: '收藏' },
   common: {
     close: '关闭',
     updatedAt: '更新于 {{time}}',
@@ -325,10 +325,35 @@ const zh: Resources = {
     kindTaken: '家/公司只能各设置一个，请修改已有项目',
     label: '名称',
     labelPlaceholder: '例如：常去的咖啡店',
+    locationSearch: '搜索位置',
+    locationSearchPlaceholder: '按地址或场所名称搜索',
+    useCurrentLocation: '使用当前位置',
+    locationPicked: '已选择位置',
     save: '保存',
     delete: '删除',
     deleteConfirmTitle: '要删除这个收藏地点吗？',
     loadFailed: '收藏地点加载失败',
+  },
+  places: {
+    restaurant: '餐厅',
+    cafe: '咖啡厅',
+    convenience: '便利店',
+    hair: '美容院',
+    gas: '加油站',
+    parking: '停车场',
+    pharmacy: '药店',
+    mart: '超市',
+    nearbyTitle: '附近{{category}}',
+    empty: '附近没有结果',
+    error: '无法加载附近场所',
+    distanceM: '{{n}}米',
+  },
+  transitTab: {
+    title: '公共交通',
+    navTitle: '导航',
+    favoriteRoutes: '收藏路线',
+    recentDestinations: '最近目的地',
+    empty: '没有收藏地点或最近目的地',
   },
 };
 

@@ -2,7 +2,7 @@ from typing import Optional, Protocol
 
 import httpx
 
-from .schemas import LatLng, RouteGuide, RouteInstruction, RouteOption, TransitRouteOption, TransitStep, TransitStop, TransitVehicle
+from .schemas import LatLng, NearbyPlace, PlaceSearchResult, RouteGuide, RouteInstruction, RouteOption, TransitRouteOption, TransitStep, TransitStop, TransitVehicle
 
 
 class NavigationProvider(Protocol):
@@ -246,6 +246,76 @@ class KakaoRoutingProvider:
             return road["address_name"]
         address = doc.get("address")
         return address.get("address_name") if address else None
+
+    # category_group_code 가 있으면 카카오 카테고리 검색을, 없으면(헤어샵처럼 전용 코드가 없는 업종) 키워드 검색을 쓴다.
+    # 둘 다 응답 모양(documents[].{place_name,address_name,x,y,distance})이 같아 같은 방식으로 NearbyPlace 를 만든다.
+    async def search_nearby(
+        self,
+        point: LatLng,
+        radius_m: int,
+        *,
+        category_group_code: Optional[str] = None,
+        keyword: Optional[str] = None,
+    ) -> list["NearbyPlace"]:
+        url = (
+            "https://dapi.kakao.com/v2/local/search/category.json"
+            if category_group_code
+            else "https://dapi.kakao.com/v2/local/search/keyword.json"
+        )
+        params = {
+            "x": point.lng,
+            "y": point.lat,
+            "radius": radius_m,
+            "sort": "distance",
+            "size": 15,
+        }
+        if category_group_code:
+            params["category_group_code"] = category_group_code
+        else:
+            params["query"] = keyword
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                url,
+                headers={"Authorization": f"KakaoAK {self._rest_api_key}", "KA": self._KA_HEADER},
+                params=params,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        return [
+            NearbyPlace(
+                name=doc["place_name"],
+                lat=float(doc["y"]),
+                lng=float(doc["x"]),
+                address=doc.get("road_address_name") or doc.get("address_name", ""),
+                distance_m=int(doc["distance"]) if doc.get("distance") else 0,
+            )
+            for doc in data.get("documents", [])
+        ]
+
+    # 자유 검색(장소명·주소 아무거나). 홈 화면 도착지 검색과 자동완성에 쓴다. 전국 범위 - radius 로 가두지 않는다.
+    # point 를 주면 그 좌표 근처 결과를 우선 정렬한다(카카오 기본 정렬: 정확도순이지만 x/y 가 있으면 가중치를 준다).
+    async def search_keyword(self, query: str, point: Optional[LatLng] = None, size: int = 8) -> list[PlaceSearchResult]:
+        params: dict[str, object] = {"query": query, "size": size}
+        if point:
+            params["x"] = point.lng
+            params["y"] = point.lat
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                "https://dapi.kakao.com/v2/local/search/keyword.json",
+                headers={"Authorization": f"KakaoAK {self._rest_api_key}", "KA": self._KA_HEADER},
+                params=params,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        return [
+            PlaceSearchResult(
+                name=doc["place_name"],
+                lat=float(doc["y"]),
+                lng=float(doc["x"]),
+                address=doc.get("road_address_name") or doc.get("address_name", ""),
+            )
+            for doc in data.get("documents", [])
+        ]
 
 
 def _int_or_none(value: object) -> Optional[int]:

@@ -28,6 +28,7 @@ export function kakaoMapHtml(appKey: string): string {
     var destinationOverlay = null;
     var polyline = null;
     var casing = null;
+    var placeOverlays = [];
 
     function toLatLngs(path) {
       return path.map(function (p) { return new kakao.maps.LatLng(p.lat, p.lng); });
@@ -66,6 +67,34 @@ export function kakaoMapHtml(appKey: string): string {
       var dot = document.createElement('div');
       Object.assign(dot.style, { width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#ffffff' });
       root.appendChild(dot);
+      return root;
+    }
+
+    // 작은 점(실제 좌표) + 그 밑에 떠 있는 이름표. 앵커(0.5, 0.5)가 점 크기만 기준으로 잡히도록
+    // 이름표는 position: absolute 로 점 바깥에 덧붙인다(root 의 레이아웃 크기에 안 들어간다).
+    function createPlaceMarker(color, label) {
+      var root = document.createElement('div');
+      root.setAttribute('role', 'img');
+      root.setAttribute('aria-label', label);
+      Object.assign(root.style, { position: 'relative', width: '14px', height: '14px' });
+
+      var dot = document.createElement('div');
+      Object.assign(dot.style, {
+        width: '14px', height: '14px', borderRadius: '50%', backgroundColor: color,
+        border: '2px solid #ffffff', boxShadow: '0 1px 4px rgba(15, 23, 42, 0.45)',
+      });
+      root.appendChild(dot);
+
+      var tag = document.createElement('div');
+      tag.textContent = label;
+      Object.assign(tag.style, {
+        position: 'absolute', top: '18px', left: '50%', transform: 'translateX(-50%)',
+        maxWidth: '110px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        backgroundColor: '#ffffff', color: '#1F2430', fontSize: '11px', fontWeight: '700',
+        padding: '2px 6px', borderRadius: '8px', boxShadow: '0 1px 4px rgba(15, 23, 42, 0.3)',
+      });
+      root.appendChild(tag);
+
       return root;
     }
 
@@ -144,6 +173,27 @@ export function kakaoMapHtml(appKey: string): string {
       followTo: function (point, options) {
         // headingUp 회전 없이, 해당 지점으로 레벨만 맞춰 이동한다(현재 앱에서 호출되지 않는 경로).
         window.KMAP.panTo(point, { level: options && options.level });
+      },
+      clearPlaces: function () {
+        placeOverlays.forEach(function (ov) { ov.setMap(null); });
+        placeOverlays = [];
+      },
+      showPlaces: function (places, color) {
+        if (!map) return;
+        window.KMAP.clearPlaces();
+        if (!places || places.length === 0) return;
+        var bounds = new kakao.maps.LatLngBounds();
+        places.forEach(function (p, i) {
+          var position = new kakao.maps.LatLng(p.point.lat, p.point.lng);
+          bounds.extend(position);
+          var content = createPlaceMarker(color, p.label);
+          content.addEventListener('click', function () { post({ type: 'placeClick', index: i }); });
+          var overlay = new kakao.maps.CustomOverlay({
+            map: map, position: position, content: content, xAnchor: 0.5, yAnchor: 0.5,
+          });
+          placeOverlays.push(overlay);
+        });
+        map.setBounds(bounds);
       },
     };
 
