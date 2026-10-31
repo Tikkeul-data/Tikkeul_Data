@@ -16,6 +16,8 @@ import { useAuth } from '../src/lib/auth/AuthContext';
 import { favoritesApi, type FavoriteKind, type FavoritePlace } from '../src/lib/favorites/api';
 import { getCurrentLocation } from '../src/lib/location/getCurrentLocation';
 import { setGuidanceRequest } from '../src/lib/navigation/guidanceSession';
+import { searchPlaces, type PlaceSearchResult } from '../src/lib/places/search';
+import type { RoutePoint } from '../src/map/types';
 import { colors, radius, shadow, space } from '../src/theme';
 
 const KIND_ICON: Record<FavoriteKind, LucideIcon> = { home: House, work: Briefcase, custom: MapPin };
@@ -174,8 +176,33 @@ function AddFavoriteCard({ token, existingKinds, onAdded }: { token: string; exi
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<FavoriteKind>('custom');
   const [label, setLabel] = useState('');
+  const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<PlaceSearchResult[]>([]);
+  const [picked, setPicked] = useState<RoutePoint | null>(null);
   const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      searchPlaces(query.trim())
+        .then((results) => {
+          if (!cancelled) setSuggestions(results);
+        })
+        .catch(() => {
+          if (!cancelled) setSuggestions([]);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query]);
 
   if (!open) {
     return (
@@ -186,14 +213,34 @@ function AddFavoriteCard({ token, existingKinds, onAdded }: { token: string; exi
     );
   }
 
+  const onPickSuggestion = (place: PlaceSearchResult) => {
+    setPicked(place.point);
+    setQuery(place.name);
+    setSuggestions([]);
+    if (!label.trim()) setLabel(place.name);
+  };
+
+  const onUseCurrentLocation = async () => {
+    setLocating(true);
+    try {
+      const point = await getCurrentLocation();
+      setPicked(point);
+      setQuery(t('map.myLocation'));
+      setSuggestions([]);
+    } finally {
+      setLocating(false);
+    }
+  };
+
   const onSave = async () => {
-    if (!label.trim()) return;
+    if (!label.trim() || !picked) return;
     setSaving(true);
     setError(null);
     try {
-      const point = await getCurrentLocation();
-      await favoritesApi.create({ kind, label: label.trim(), lat: point.lat, lon: point.lng }, token);
+      await favoritesApi.create({ kind, label: label.trim(), lat: picked.lat, lon: picked.lng }, token);
       setLabel('');
+      setQuery('');
+      setPicked(null);
       setKind('custom');
       setOpen(false);
       await onAdded();
@@ -218,9 +265,35 @@ function AddFavoriteCard({ token, existingKinds, onAdded }: { token: string; exi
       {(kind === 'home' ? existingKinds?.has('home') : kind === 'work' ? existingKinds?.has('work') : false) && (
         <Text style={styles.kindTakenNotice}>{t('favorites.kindTaken')}</Text>
       )}
+      <TextField
+        label={t('favorites.locationSearch')}
+        placeholder={t('favorites.locationSearchPlaceholder')}
+        value={query}
+        onChangeText={(text) => {
+          setQuery(text);
+          setPicked(null);
+        }}
+      />
+      {suggestions.length > 0 && (
+        <View style={styles.suggestionList}>
+          {suggestions.map((p, i) => (
+            <Pressable key={i} style={styles.suggestionRow} onPress={() => onPickSuggestion(p)} accessibilityRole="button">
+              <Text style={styles.suggestionName} numberOfLines={1}>
+                {p.name}
+              </Text>
+              <Text style={styles.suggestionAddress} numberOfLines={1}>
+                {p.address}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+      <Pressable onPress={onUseCurrentLocation} style={({ pressed }) => [styles.currentLocationRow, pressed && styles.pressed]} accessibilityRole="button">
+        {locating ? <ActivityIndicator size="small" color={colors.brand} /> : <Text style={styles.currentLocationHint}>📍 {t('favorites.useCurrentLocation')}</Text>}
+      </Pressable>
+      {picked && !suggestions.length && <Text style={styles.pickedNotice}>{t('favorites.locationPicked')}</Text>}
       <TextField label={t('favorites.label')} placeholder={t('favorites.labelPlaceholder')} value={label} onChangeText={setLabel} error={error ?? undefined} />
-      <Text style={styles.currentLocationHint}>📍 {t('map.myLocation')}</Text>
-      <PrimaryButton label={t('favorites.save')} onPress={onSave} disabled={!label.trim() || saving} loading={saving} />
+      <PrimaryButton label={t('favorites.save')} onPress={onSave} disabled={!label.trim() || !picked || saving} loading={saving} />
     </Card>
   );
 }
@@ -268,5 +341,11 @@ const styles = StyleSheet.create({
   addTitle: { fontSize: 17, fontWeight: '800', color: colors.ink },
   kindRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   kindTakenNotice: { fontSize: 13, color: colors.dangerInk, fontWeight: '600' },
-  currentLocationHint: { fontSize: 13, color: colors.muted },
+  currentLocationRow: { minHeight: 36, justifyContent: 'center' },
+  currentLocationHint: { fontSize: 13, color: colors.brand, fontWeight: '700' },
+  suggestionList: { gap: 2 },
+  suggestionRow: { minHeight: 44, justifyContent: 'center', paddingHorizontal: space.xs, borderRadius: radius.sm, backgroundColor: colors.paper },
+  suggestionName: { fontSize: 14, fontWeight: '700', color: colors.ink },
+  suggestionAddress: { fontSize: 12, color: colors.muted },
+  pickedNotice: { fontSize: 12, color: colors.muted },
 });

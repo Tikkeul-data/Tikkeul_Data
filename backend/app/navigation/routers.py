@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException
 
 from .config import get_settings
@@ -6,6 +8,8 @@ from .schemas import (
     LatLng,
     ModeRouteRequest,
     NavigationResponse,
+    NearbyPlacesResponse,
+    PlaceSearchResponse,
     ReverseGeocodeResponse,
     RouteRequest,
     RouteStylesRequest,
@@ -16,6 +20,22 @@ from .service import get_best_route, get_mode_route, get_route_styles, get_trans
 
 router = APIRouter(prefix="/navigation", tags=["navigation"])
 geocode_router = APIRouter(prefix="/geocode", tags=["geocode"])
+places_router = APIRouter(prefix="/places", tags=["places"])
+
+# 카카오 로컬 카테고리 그룹 코드(developers.kakao.com/docs/latest/ko/local/dev-guide#search-by-category).
+# "hair"(헤어샵)는 전용 그룹 코드가 없어 키워드 검색("미용실")으로 대신한다.
+_CATEGORY_GROUP_CODES: dict[str, str] = {
+    "restaurant": "FD6",
+    "cafe": "CE7",
+    "convenience": "CS2",
+    "gas": "OL7",
+    "parking": "PK6",
+    "pharmacy": "PM9",
+    "mart": "MT1",
+}
+_CATEGORY_KEYWORDS: dict[str, str] = {
+    "hair": "미용실",
+}
 
 
 @router.post("/route", response_model=NavigationResponse)
@@ -64,6 +84,37 @@ async def post_transit_routes(req: RouteRequest) -> TransitRoutesResponse:
     except Exception as exc:
         raise HTTPException(status_code=503, detail="대중교통 경로를 찾을 수 없습니다") from exc
     return TransitRoutesResponse(routes=options, **counts)
+
+
+@places_router.get("/nearby", response_model=NearbyPlacesResponse)
+async def get_nearby_places(category: str, lat: float, lng: float, radius_m: int = 1000) -> NearbyPlacesResponse:
+    group_code = _CATEGORY_GROUP_CODES.get(category)
+    keyword = _CATEGORY_KEYWORDS.get(category)
+    if not group_code and not keyword:
+        raise HTTPException(status_code=400, detail=f"알 수 없는 장소 카테고리: {category}")
+    settings = get_settings()
+    kakao = KakaoRoutingProvider(settings.kakao_rest_api_key)
+    try:
+        places = await kakao.search_nearby(
+            LatLng(lat=lat, lng=lng), radius_m, category_group_code=group_code, keyword=keyword
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="주변 장소를 찾을 수 없습니다") from exc
+    return NearbyPlacesResponse(places=places)
+
+
+@places_router.get("/search", response_model=PlaceSearchResponse)
+async def get_place_search(query: str, lat: Optional[float] = None, lng: Optional[float] = None) -> PlaceSearchResponse:
+    if not query.strip():
+        return PlaceSearchResponse(places=[])
+    settings = get_settings()
+    kakao = KakaoRoutingProvider(settings.kakao_rest_api_key)
+    point = LatLng(lat=lat, lng=lng) if lat is not None and lng is not None else None
+    try:
+        places = await kakao.search_keyword(query, point)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="장소를 검색할 수 없습니다") from exc
+    return PlaceSearchResponse(places=places)
 
 
 @geocode_router.get("/reverse", response_model=ReverseGeocodeResponse)

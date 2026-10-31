@@ -163,9 +163,11 @@ interface KakaoMapProps {
   onUserPan?: () => void;
   /** 지도가 준비되면 한 번 부른다. 준비 전에 호출한 showRoute·setLocationMarker 는 무시되므로 이때 다시 적용한다 */
   onReady?: () => void;
+  /** showPlaces 로 찍은 점을 클릭했을 때, 그 점의 places 배열 안 순번을 알려준다 */
+  onPlaceClick?: (index: number) => void;
 }
 
-export function KakaoMap({ ref, onMapClick, autoLocate = true, onUserPan, onReady, headingUp = false }: KakaoMapProps) {
+export function KakaoMap({ ref, onMapClick, autoLocate = true, onUserPan, onReady, onPlaceClick, headingUp = false }: KakaoMapProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const rotationRef = useRef<number | null>(null);
   const drivingScaleRef = useRef(2);
@@ -178,6 +180,7 @@ export function KakaoMap({ ref, onMapClick, autoLocate = true, onUserPan, onRead
   // 주행 스타일 경로의 흰 테두리 선(코어 선 polylineRef 아래에 깔린다). 둘은 항상 같은 좌표를 가진다.
   const casingRef = useRef<KakaoPolyline | null>(null);
   const destinationRef = useRef<KakaoOverlay | null>(null);
+  const placeOverlaysRef = useRef<KakaoOverlay[]>([]);
   const markerKindRef = useRef<'dot' | 'arrow'>('dot');
   const arrowRotorRef = useRef<HTMLElement | null>(null);
   const arrowAngleRef = useRef<number | null>(null);
@@ -309,6 +312,66 @@ export function KakaoMap({ ref, onMapClick, autoLocate = true, onUserPan, onRead
     });
   };
 
+  const clearPlaces = () => {
+    placeOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
+    placeOverlaysRef.current = [];
+  };
+
+  // 카테고리 주변 검색 결과를 색 있는 점으로 지도에 뿌린다(음식점·카페 등 카테고리별 구분용).
+  const showPlaces = (places: { point: RoutePoint; label: string }[], color: string) => {
+    const kakao = window.kakao;
+    const map = mapRef.current;
+    if (!kakao || !map) return;
+    clearPlaces();
+    if (places.length === 0) return;
+    const bounds = new kakao.maps.LatLngBounds();
+    places.forEach(({ point, label }, index) => {
+      const position = new kakao.maps.LatLng(point.lat, point.lng);
+      bounds.extend(position);
+      // 작은 점(실제 좌표) + 그 밑에 이름표. 이름표는 absolute 로 덧붙여 앵커가 점 크기만 기준으로 잡히게 한다.
+      const root = document.createElement('div');
+      root.setAttribute('role', 'img');
+      root.setAttribute('aria-label', label);
+      Object.assign(root.style, { position: 'relative', width: '14px', height: '14px', cursor: 'pointer' });
+      root.addEventListener('click', () => onPlaceClick?.(index));
+
+      const dot = document.createElement('div');
+      Object.assign(dot.style, {
+        width: '14px',
+        height: '14px',
+        borderRadius: '50%',
+        backgroundColor: color,
+        border: '2px solid #ffffff',
+        boxShadow: '0 1px 4px rgba(15, 23, 42, 0.45)',
+      });
+      root.appendChild(dot);
+
+      const tag = document.createElement('div');
+      tag.textContent = label;
+      Object.assign(tag.style, {
+        position: 'absolute',
+        top: '18px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        maxWidth: '110px',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        backgroundColor: '#ffffff',
+        color: colors.ink,
+        fontSize: '11px',
+        fontWeight: '700',
+        padding: '2px 6px',
+        borderRadius: '8px',
+        boxShadow: '0 1px 4px rgba(15, 23, 42, 0.3)',
+      });
+      root.appendChild(tag);
+
+      placeOverlaysRef.current.push(new kakao.maps.CustomOverlay({ map, position, content: root, xAnchor: 0.5, yAnchor: 0.5 }));
+    });
+    map.setBounds(bounds);
+  };
+
   // level 을 주면(처음 맞출 때) 확대 수준을 바꾸고 바로 옮기고, 아니면 부드럽게 옮긴다.
   const panTo = (point: RoutePoint, options?: { level?: number }) => {
     const kakao = window.kakao;
@@ -382,7 +445,7 @@ export function KakaoMap({ ref, onMapClick, autoLocate = true, onUserPan, onRead
     else map.panTo(next);
   };
 
-  useImperativeHandle(ref, () => ({ moveToMyLocation: () => locate(true), showRoute, setRoutePath, clearRoute, setDestination, setLocationMarker, panTo, followTo }));
+  useImperativeHandle(ref, () => ({ moveToMyLocation: () => locate(true), showRoute, setRoutePath, clearRoute, setDestination, setLocationMarker, panTo, followTo, showPlaces, clearPlaces }));
 
   useEffect(() => {
     const viewport = viewportRef.current;

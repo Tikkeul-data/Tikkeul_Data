@@ -148,3 +148,26 @@ class TransitRoutesResponse(BaseModel):
     subway: int
     bus_and_subway: int
     routes: list[TransitRouteOption]
+
+
+class NearbyPlace(BaseModel):
+    name: str
+    lat: float
+    lng: float
+    address: str
+    distance_m: int
+
+
+class NearbyPlacesResponse(BaseModel):
+    places: list[NearbyPlace]
+
+
+class PlaceSearchResult(BaseModel):
+    name: str
+    lat: float
+    lng: float
+    address: str
+
+
+class PlaceSearchResponse(BaseModel):
+    places: list[PlaceSearchResult]

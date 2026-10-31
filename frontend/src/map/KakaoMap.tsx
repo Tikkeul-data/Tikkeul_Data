@@ -19,9 +19,11 @@ interface KakaoMapProps {
   autoLocate?: boolean;
   onUserPan?: () => void;
   onReady?: () => void;
+  /** showPlaces 로 찍은 점을 탭했을 때, 그 점의 places 배열 안 순번을 알려준다 */
+  onPlaceClick?: (index: number) => void;
 }
 
-export function KakaoMap({ ref, onMapClick, autoLocate = true, onUserPan, onReady }: KakaoMapProps) {
+export function KakaoMap({ ref, onMapClick, autoLocate = true, onUserPan, onReady, onPlaceClick }: KakaoMapProps) {
   const webRef = useRef<WebView>(null);
   const readyRef = useRef(false);
   const queueRef = useRef<string[]>([]);
@@ -57,13 +59,15 @@ export function KakaoMap({ ref, onMapClick, autoLocate = true, onUserPan, onRead
     setRoutePath: (path) => call('setRoutePath', path),
     clearRoute: () => call('clearRoute'),
     setDestination: (point) => call('setDestination', point),
+    showPlaces: (places, color) => call('showPlaces', places, color),
+    clearPlaces: () => call('clearPlaces'),
     setLocationMarker: (point, options) => call('setLocationMarker', point, options ?? {}),
     panTo: (point, options) => call('panTo', point, options ?? {}),
     followTo: (point, options) => call('followTo', point, options),
   }));
 
   const handleMessage = (event: { nativeEvent: { data: string } }) => {
-    let message: { type: string; point?: RoutePoint };
+    let message: { type: string; point?: RoutePoint; index?: number };
     try {
       message = JSON.parse(event.nativeEvent.data);
     } catch {
@@ -84,6 +88,8 @@ export function KakaoMap({ ref, onMapClick, autoLocate = true, onUserPan, onRead
       onMapClick?.(message.point);
     } else if (message.type === 'userPan') {
       onUserPan?.();
+    } else if (message.type === 'placeClick' && typeof message.index === 'number') {
+      onPlaceClick?.(message.index);
     }
   };
 

@@ -1,6 +1,6 @@
 import '../src/i18n';
 
-import { House, Map as MapIcon, TriangleAlert, type LucideIcon } from 'lucide-react-native';
+import { Bus, House, Navigation as NavigationIcon, Star, type LucideIcon } from 'lucide-react-native';
 import { Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,13 +44,15 @@ export default function RootLayout() {
         }}
       >
         <Tabs.Screen name="index" options={{ title: t('tabs.home'), tabBarIcon: tabIcon(House) }} />
-        <Tabs.Screen name="map" options={{ title: t('tabs.map'), tabBarIcon: tabIcon(MapIcon) }} />
-        <Tabs.Screen name="alerts" options={{ title: t('tabs.alerts'), tabBarIcon: tabIcon(TriangleAlert) }} />
+        <Tabs.Screen name="transit" options={{ title: t('tabs.transit'), tabBarIcon: tabIcon(Bus) }} />
+        <Tabs.Screen name="navigate" options={{ title: t('tabs.navigate'), tabBarIcon: tabIcon(NavigationIcon) }} />
+        <Tabs.Screen name="favorites" options={{ title: t('tabs.saved'), tabBarIcon: tabIcon(Star) }} />
         {/* 길안내 화면: 홈에서 안내를 시작할 때만 들어간다. 탭 항목은 숨기고(href: null 은 주소로 직접 열리지 않는다), 이 화면에서는 지도를 가리지 않게 탭 막대도 숨긴다. */}
         <Tabs.Screen name="navigation" options={hiddenScreen} />
         <Tabs.Screen name="login" options={hiddenScreen} />
         <Tabs.Screen name="signup" options={hiddenScreen} />
-        <Tabs.Screen name="favorites" options={hiddenScreen} />
+        <Tabs.Screen name="map" options={hiddenScreen} />
+        <Tabs.Screen name="alerts" options={hiddenScreen} />
       </Tabs>
     </AuthProvider>
   );

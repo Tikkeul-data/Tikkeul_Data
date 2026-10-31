@@ -1,5 +1,5 @@
 import type * as React from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -9,7 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Bus, Crosshair, Footprints, MapPin, Search, TrainFront, X, type LucideIcon } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -18,11 +18,12 @@ import { NavigationHazardAlert } from '../src/components/alerts/NavigationHazard
 import { Logo } from '../src/components/Logo';
 import { Card } from '../src/components/ui/Card';
 import { BottomSheet } from '../src/components/ui/BottomSheet';
+import { CategoryChip } from '../src/components/ui/CategoryChip';
 import { Chip } from '../src/components/ui/Chip';
 import { RoundButton } from '../src/components/ui/RoundButton';
 import { ScreenHeader } from '../src/components/ui/ScreenHeader';
 import { SearchBar } from '../src/components/ui/SearchBar';
-import { HazardSimulator, useHazardSimulation } from '../src/dev/HazardSimulator';
+import { useHazardSimulation } from '../src/dev/HazardSimulator';
 import { guidanceTargetOf, setGuidanceRequest } from '../src/lib/navigation/guidanceSession';
 import type { NavRoute } from '../src/lib/navigation/guidanceEngine';
 import { useRouteHazardWarning } from '../src/lib/navigation/useRouteHazardWarning';
@@ -38,6 +39,10 @@ import { pickUrgentWarning } from '../src/lib/urgentWarning';
 import { KakaoMap } from '../src/map/KakaoMap';
 import { findDemoDestination } from '../src/map/demoDestinations';
 import { getCurrentLocation } from '../src/lib/location/getCurrentLocation';
+import { NEARBY_CATEGORIES, fetchNearbyPlaces, type NearbyPlace, type PlaceCategory } from '../src/lib/places/api';
+import { searchPlaces, type PlaceSearchResult } from '../src/lib/places/search';
+import { loadRecentRoutes, loadRecents, saveRecent, saveRecentRoute, type RecentDestination, type RecentRoute } from '../src/lib/recents';
+import { clearPendingSearch, getPendingSearch } from '../src/lib/navigation/pendingSearch';
 import {
   fetchAddress,
   fetchModeRoute,
@@ -81,12 +86,6 @@ const TRANSIT_CATEGORY_LABEL: Record<TransitCategory, string> = {
   BUS_AND_SUBWAY: 'map.transitBusAndSubway',
 };
 
-interface RecentDestination {
-  label: string;
-  point: RoutePoint;
-}
-
-const RECENTS_KEY = 'tikkeul:recentDestinations';
 const COMPACT_WIDTH = 360;
 const RECENTS_MAX_HEIGHT = 280;
 const RECENTS_MIN_HEIGHT = 120;
@@ -94,61 +93,6 @@ const RECENTS_MIN_HEIGHT = 120;
 const TAB_BAR_ALLOWANCE = 76;
 // 위험 경고 카드 높이의 기본값. 카드가 처음 그려져 실제 높이를 알려 주기(onHeightChange) 전까지만 쓴다.
 const HAZARD_ALERT_FALLBACK_HEIGHT = 190;
-const MAX_RECENTS = 8;
-
-// shortcut: 브라우저 localStorage에만 저장(기기 로컬, 이 브라우저 안에서만 보임). 계정 동기화 없음.
-function loadRecents(): RecentDestination[] {
-  try {
-    if (typeof localStorage === 'undefined') return [];
-    const raw = localStorage.getItem(RECENTS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveRecent(entry: RecentDestination): RecentDestination[] {
-  try {
-    if (typeof localStorage === 'undefined') return [];
-    const next = [entry, ...loadRecents().filter((r) => r.label !== entry.label)].slice(0, MAX_RECENTS);
-    localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
-    return next;
-  } catch {
-    return [];
-  }
-}
-
-interface RecentRoute {
-  originLabel: string;
-  destinationLabel: string;
-  destinationPoint: RoutePoint;
-  mode: TravelMode;
-}
-
-const RECENT_ROUTES_KEY = 'tikkeul:recentRoutes';
-const MAX_RECENT_ROUTES = 5;
-
-function loadRecentRoutes(): RecentRoute[] {
-  try {
-    if (typeof localStorage === 'undefined') return [];
-    const raw = localStorage.getItem(RECENT_ROUTES_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveRecentRoute(entry: RecentRoute): RecentRoute[] {
-  try {
-    if (typeof localStorage === 'undefined') return [];
-    const isSame = (r: RecentRoute) => r.destinationLabel === entry.destinationLabel && r.mode === entry.mode;
-    const next = [entry, ...loadRecentRoutes().filter((r) => !isSame(r))].slice(0, MAX_RECENT_ROUTES);
-    localStorage.setItem(RECENT_ROUTES_KEY, JSON.stringify(next));
-    return next;
-  } catch {
-    return [];
-  }
-}
 
 // 1시간 넘으면 "N시간 M분"으로, 안 넘으면 "N분"으로 — 298분 같은 숫자를 그대로 보여주지 않는다.
 function formatDuration(totalMinutes: number, t: (key: string, options?: Record<string, unknown>) => string): string {
@@ -273,6 +217,35 @@ export default function HomeScreen() {
   // 위험 경고 카드의 실제 높이. 상세 보기를 펴면 커지므로 그때마다 새로 받는다.
   const [alertHeight, setAlertHeight] = useState(HAZARD_ALERT_FALLBACK_HEIGHT);
 
+  // 검색창 밑 카테고리 버튼(음식점·카페 등)으로 내 주변 장소를 본다.
+  const [nearbyCategory, setNearbyCategory] = useState<PlaceCategory | null>(null);
+  const [nearbyPlaces, setNearbyPlaces] = useState<NearbyPlace[] | null>(null);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [nearbyError, setNearbyError] = useState(false);
+
+  // 도착지 입력창에 2글자 이상 치면 실제 장소 검색(자동완성)을 보여준다. 데모 목적지 4곳만 되던 한계를 없앤다.
+  const [destinationSuggestions, setDestinationSuggestions] = useState<PlaceSearchResult[]>([]);
+  useEffect(() => {
+    if (!destinationFocused || destination.trim().length < 2) {
+      setDestinationSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      searchPlaces(destination.trim())
+        .then((results) => {
+          if (!cancelled) setDestinationSuggestions(results);
+        })
+        .catch(() => {
+          if (!cancelled) setDestinationSuggestions([]);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [destination, destinationFocused]);
+
   // 어린이보호구역: 실제 안내 경로에 실제 보호구역 데이터를 매칭해 접근 경고를 띄운다. 조회·매칭·단계 경고는
   // 길안내 화면과 같은 훅(useRouteHazardWarning)을 쓴다. 경로가 지나는 시군구를 표본 조회한다(경로 시작점 하나만 보지 않는다).
   // activeRoute 가 바뀔 때만(안내 시작·종료·재탐색) 새로 만든다. 위치 폴링용 투영(projectOntoRoute)에도 쓴다.
@@ -361,6 +334,7 @@ export default function HomeScreen() {
   });
 
   const onChangeDestination = (text: string) => {
+    closeNearby();
     setPlannerOpen(true);
     setDestination(text);
     setManualDestination(null);
@@ -438,19 +412,42 @@ export default function HomeScreen() {
     return null;
   };
 
+  // 대중교통·네비게이션 탭에서 목적지를 고르고 돌아오면, 그 조건으로 바로 경로를 검색해 지도에 보여준다.
+  useFocusEffect(
+    useCallback(() => {
+      const pending = getPendingSearch();
+      if (!pending) return;
+      clearPendingSearch();
+      setMode(pending.mode);
+      setDestination(pending.label);
+      setManualDestination(pending.point);
+      searchRoutes(pending.point, pending.label, pending.mode);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+
   const onSearch = async () => {
-    const destinationPoint = manualDestination ?? findDemoDestination(destination);
+    const trimmed = destination.trim();
+    if (trimmed.length === 0) {
+      setDestinationFocused(true);
+      return;
+    }
+    // 제안 목록에서 고르지 않고 그냥 검색을 누르면: 데모 목적지(즉시) → 실제 장소 검색 첫 결과 순으로 찾는다.
+    const destinationPoint = manualDestination ?? findDemoDestination(destination) ?? (await searchPlaces(trimmed))[0]?.point ?? null;
     if (!destinationPoint) {
-      if (destination.trim().length === 0) {
-        setDestinationFocused(true);
-        return;
-      }
       setSearched(true);
       setRouteStyles(null);
       setLiveError(false);
       return;
     }
-    await searchRoutes(destinationPoint, destination.trim(), mode);
+    await searchRoutes(destinationPoint, trimmed, mode);
+  };
+
+  const onPickSuggestion = async (place: PlaceSearchResult) => {
+    setDestinationSuggestions([]);
+    setDestination(place.name);
+    setManualDestination(place.point);
+    await searchRoutes(place.point, place.name, mode);
   };
 
   const onChangeMode = async (next: TravelMode) => {
@@ -497,6 +494,44 @@ export default function HomeScreen() {
     setSearched(false);
     setPlannerOpen(false);
     mapRef.current?.clearRoute();
+  };
+
+  const closeNearby = () => {
+    setNearbyCategory(null);
+    setNearbyPlaces(null);
+    setNearbyError(false);
+    mapRef.current?.clearPlaces();
+  };
+
+  // 카테고리 버튼: 같은 카테고리를 다시 누르면 닫고, 다른 카테고리면 현재 위치 기준으로 다시 찾아 지도에 점을 찍는다.
+  const onPressCategory = async (category: PlaceCategory) => {
+    if (nearbyCategory === category) {
+      closeNearby();
+      return;
+    }
+    onResetSearch();
+    setNearbyCategory(category);
+    setNearbyPlaces(null);
+    setNearbyError(false);
+    setNearbyLoading(true);
+    try {
+      const origin = await getCurrentLocation();
+      const places = await fetchNearbyPlaces(category, origin);
+      setNearbyPlaces(places);
+      const color = NEARBY_CATEGORIES.find((c) => c.key === category)?.color ?? colors.brand;
+      mapRef.current?.showPlaces(places.map((p) => ({ point: p.point, label: p.name })), color);
+    } catch {
+      setNearbyError(true);
+    } finally {
+      setNearbyLoading(false);
+    }
+  };
+
+  const onPickNearbyPlace = async (place: NearbyPlace) => {
+    closeNearby();
+    setDestination(place.name);
+    setManualDestination(place.point);
+    await searchRoutes(place.point, place.name, mode);
   };
 
   const onStartGuidance = (route: StyledRoute) => {
@@ -553,7 +588,7 @@ export default function HomeScreen() {
   // 경고가 떠 있을 때 그 카드(+위아래 여백)가 차지하는 높이. 시트·최근 검색 패널은 이만큼을 비워 둔다.
   const alertReserve = urgent ? alertHeight + space.lg + space.sm : 0;
   const maxSheetHeightWithAlert = Math.max(0, windowHeight - TAB_BAR_ALLOWANCE - alertReserve - insets.top);
-  const hasSheet = !!(pickedPoint || activeRoute || liveLoading || routeStyles || transitResult || searched);
+  const hasSheet = !!(nearbyCategory || pickedPoint || activeRoute || liveLoading || routeStyles || transitResult || searched);
   const hazardOffset = hasSheet
     ? Math.min(sheetHeight, maxSheetHeightWithAlert)
     : 0;
@@ -567,12 +602,13 @@ export default function HomeScreen() {
     RECENTS_MAX_HEIGHT,
     Math.max(RECENTS_MIN_HEIGHT, windowHeight - recentsTop - keyboardHeight - TAB_BAR_ALLOWANCE - alertReserve),
   );
-  const showRecents = destinationFocused && !inRouteView && (recents.length > 0 || recentRoutes.length > 0);
+  const showSuggestions = destinationFocused && !inRouteView && destination.trim().length >= 2;
+  const showRecents = destinationFocused && !inRouteView && !showSuggestions && (recents.length > 0 || recentRoutes.length > 0);
 
   return (
     <View style={styles.root}>
       <View style={styles.mapLayer}>
-        <KakaoMap ref={mapRef} onMapClick={onMapClick} />
+        <KakaoMap ref={mapRef} onMapClick={onMapClick} onPlaceClick={(i) => nearbyPlaces?.[i] && onPickNearbyPlace(nearbyPlaces[i])} />
       </View>
 
       {/* 위험 경고는 상단 오버레이(메뉴·시뮬레이터)보다 먼저 그려 그 아래에 깔린다. */}
@@ -635,7 +671,7 @@ export default function HomeScreen() {
                       style={[styles.plannerText, styles.plannerInput]}
                       value={destination}
                       onChangeText={onChangeDestination}
-                      onFocus={() => setDestinationFocused(true)}
+                      onFocus={() => { closeNearby(); setDestinationFocused(true); }}
                       onBlur={() => setTimeout(() => setDestinationFocused(false), 150)}
                       accessibilityLabel={t('map.to')}
                       placeholder={t('map.toPlaceholder')}
@@ -672,10 +708,52 @@ export default function HomeScreen() {
               value={destination}
               onChangeText={onChangeDestination}
               returnKeyType="search"
-              onFocus={() => setPlannerOpen(true)}
+              onFocus={() => { closeNearby(); setPlannerOpen(true); }}
               onSubmitEditing={() => setPlannerOpen(true)}
               trailing={<SearchAction label={t('map.search')} compact={compactSearch} onPress={() => setPlannerOpen(true)} />}
             />
+          )}
+          {!showPlanner && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryRow}
+              accessibilityRole="tablist"
+            >
+              {NEARBY_CATEGORIES.map((c) => (
+                <CategoryChip
+                  key={c.key}
+                  label={t(c.labelKey)}
+                  icon={c.icon}
+                  color={c.color}
+                  selected={nearbyCategory === c.key}
+                  onPress={() => onPressCategory(c.key)}
+                />
+              ))}
+            </ScrollView>
+          )}
+          {showSuggestions && (
+            <ScrollView
+              style={[styles.recentsPanel, { maxHeight: recentsMaxHeight }]}
+              contentContainerStyle={styles.recentsPanelContent}
+              onLayout={(e) => setRecentsTop(insets.top + space.md + e.nativeEvent.layout.y)}
+              keyboardShouldPersistTaps="handled"
+            >
+              {destinationSuggestions.length === 0 ? (
+                <Text style={styles.notice}>{t('map.liveLoading')}</Text>
+              ) : (
+                destinationSuggestions.map((p, i) => (
+                  <Pressable key={i} style={styles.recentItem} onPress={() => onPickSuggestion(p)} accessibilityRole="button">
+                    <Text style={styles.recentItemText} numberOfLines={1}>
+                      {p.name}
+                    </Text>
+                    <Text style={styles.nearbyAddress} numberOfLines={1}>
+                      {p.address}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+            </ScrollView>
           )}
           {showRecents && (
             <ScrollView
@@ -723,13 +801,39 @@ export default function HomeScreen() {
           <View style={styles.fabWrap}>
             <RoundButton icon={Crosshair} label={t('map.myLocation')} onPress={() => mapRef.current?.moveToMyLocation()} />
           </View>
-          {__DEV__ && <HazardSimulator sim={sim} />}
         </View>
       </View>
 
       {/* 하단 패널 6곳. 고정 4곳(지점 선택·탐색 중·경로 카드·안내 문구)은 draggable={false}, 드래그 2곳(안내 중·대중교통)은 기본값.
           key 는 패널 종류가 바뀔 때 접힘 상태를 새로 시작하게 한다(예전엔 컴포넌트 종류가 달라 자연히 새로 시작했다). */}
-      {pickedPoint ? (
+      {nearbyCategory ? (
+        <BottomSheet key="nearby" {...sheetProps}>
+          <Text style={styles.recentsTitle}>{t('places.nearbyTitle', { category: t(`places.${nearbyCategory}`) })}</Text>
+          {nearbyLoading ? (
+            <Text style={styles.notice}>{t('map.liveLoading')}</Text>
+          ) : nearbyError ? (
+            <Text style={styles.notice}>{t('places.error')}</Text>
+          ) : nearbyPlaces && nearbyPlaces.length === 0 ? (
+            <Text style={styles.notice}>{t('places.empty')}</Text>
+          ) : (
+            <ScrollView style={styles.nearbyList}>
+              {nearbyPlaces?.map((place, i) => (
+                <Pressable key={i} style={styles.nearbyRow} onPress={() => onPickNearbyPlace(place)} accessibilityRole="button">
+                  <View style={styles.nearbyItemMain}>
+                    <Text style={styles.recentItemText} numberOfLines={1}>
+                      {place.name}
+                    </Text>
+                    <Text style={styles.nearbyAddress} numberOfLines={1}>
+                      {place.address}
+                    </Text>
+                  </View>
+                  <Text style={styles.nearbyDistance}>{t('places.distanceM', { n: place.distanceM })}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+        </BottomSheet>
+      ) : pickedPoint ? (
         <BottomSheet key="pick" draggable={false} {...sheetProps}>
           <Text style={styles.notice}>{t('map.pickPrompt')}</Text>
           <View style={styles.pickActions}>
@@ -1077,6 +1181,7 @@ const styles = StyleSheet.create({
   instructionStep: { fontSize: 13, color: colors.muted, lineHeight: 19 },
   instructionCount: { fontSize: 12, color: colors.muted, textAlign: 'center' },
   modeRow: { gap: space.sm, paddingVertical: space.sm },
+  categoryRow: { gap: space.sm, paddingVertical: space.xs },
   transitList: { gap: space.sm },
   transitTabs: { gap: space.sm, paddingVertical: space.xs },
   transitCard: {
@@ -1103,4 +1208,9 @@ const styles = StyleSheet.create({
   recentsTitle: { fontSize: 13, fontWeight: '700', color: colors.muted, marginTop: space.xs },
   recentItem: { minHeight: 44, justifyContent: 'center', paddingHorizontal: space.xs },
   recentItemText: { fontSize: 15, color: colors.ink },
+  nearbyList: { maxHeight: 360 },
+  nearbyRow: { minHeight: 52, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: space.sm, paddingHorizontal: space.xs, paddingVertical: space.xs },
+  nearbyItemMain: { flex: 1, minWidth: 0, gap: 2 },
+  nearbyAddress: { fontSize: 12, color: colors.muted },
+  nearbyDistance: { fontSize: 13, fontWeight: '700', color: colors.muted },
 });
