@@ -2,7 +2,7 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-const TOKEN_KEY = 'tikkeul:authToken';
+const TOKEN_KEY = 'tikkeul_authToken';
 
 export async function getToken(): Promise<string | null> {
   if (Platform.OS === 'web') {
