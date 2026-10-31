@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  childProtectionZonesToAlerts,
+  cautionZoneToAlert,
+  cautionZonesToAlerts,
   incidentToAlert,
   incidentsToAlerts,
   protectionZoneToAlert,
+  protectionZonesToAlerts,
   sortCautionZones,
   sortProtectionZones,
 } from '../src/lib/api/convert.ts';
@@ -87,11 +89,12 @@ const zone = (over = {}) => ({
   registered_on: null, center: { lat: 37.5, lon: 127.03 }, geometry: null, ...over,
 });
 
-test('어린이보호구역만 경로 매칭용 알림으로 바꾸고, 다른 보호구역·좌표 없는 구역은 뺀다', () => {
-  assert.equal(protectionZoneToAlert(zone({ zone_type: 'senior' })), null);
+test('보호구역(어린이·노인·장애인)을 경로 매칭용 알림으로 바꾸고, 유형 모름·좌표 없는 구역은 뺀다', () => {
+  assert.equal(protectionZoneToAlert(zone({ zone_type: 'unknown' })), null);
   assert.equal(protectionZoneToAlert(zone({ center: null })), null);
   const a = protectionZoneToAlert(zone());
   assert.equal(a.type, 'school_zone');
+  assert.equal(a.zoneType, 'child');
   assert.equal(a.severity, 'caution');
   assert.equal(a.location, '서울특별시 강남구 테헤란로 1');
   assert.equal(a.description, '행복초등학교');
@@ -99,6 +102,10 @@ test('어린이보호구역만 경로 매칭용 알림으로 바꾸고, 다른 �
   assert.equal(a.longitude, 127.03);
   assert.equal(a.omnidirectional, true);
   assert.ok(!('headingDeg' in a), '방향을 만들어 넣지 않는다');
+
+  const senior = protectionZoneToAlert(zone({ zone_type: 'senior' }));
+  assert.equal(senior.type, 'school_zone');
+  assert.equal(senior.zoneType, 'senior');
 });
 
 test('도로명주소가 없으면 지번주소, 둘 다 없으면 시설명을 위치로 쓴다', () => {
@@ -115,7 +122,53 @@ test('어린이보호구역은 방향 없이도(omnidirectional) 경로 위 위�
   assert.ok(MATCH_MAX_LATERAL_M > 0);
 });
 
-test('childProtectionZonesToAlerts: 어린이 외 유형과 좌표 없는 항목은 걸러낸다', () => {
-  const zones = [zone({ id: 'c1' }), zone({ id: 's1', zone_type: 'senior' }), zone({ id: 'c2', center: null })];
-  assert.deepEqual(childProtectionZonesToAlerts(zones).map((a) => a.id), ['c1']);
+test('protectionZonesToAlerts: 유형 모름과 좌표 없는 항목만 걸러내고, 어린이·노인·장애인은 다 남긴다', () => {
+  const zones = [
+    zone({ id: 'c1' }),
+    zone({ id: 's1', zone_type: 'senior' }),
+    zone({ id: 'd1', zone_type: 'disabled' }),
+    zone({ id: 'u1', zone_type: 'unknown' }),
+    zone({ id: 'c2', center: null }),
+  ];
+  assert.deepEqual(protectionZonesToAlerts(zones).map((a) => a.id), ['c1', 's1', 'd1']);
+});
+
+const caution = (over = {}) => ({
+  id: 'cz1', kind: 'accident_prone', outbrk_type: '사고잦은구간', message: '사고 잦은 구간입니다',
+  priority: 1, step_type: 'N', event_key: 'ek1',
+  start: { location: { lat: 37.5, lon: 127.03 }, link_id: 'L1', route_no: '47', route_name: '47번국도', direction_text: '' },
+  notice: null, ...over,
+});
+
+test('사고다발구역(accident_prone)만 알림으로 바꾸고, 다른 주의운전구간 유형은 뺀다', () => {
+  assert.equal(cautionZoneToAlert(caution({ kind: 'congestion' })), null);
+  const a = cautionZoneToAlert(caution());
+  assert.equal(a.type, 'accident_prone');
+  assert.equal(a.severity, 'caution');
+  assert.equal(a.location, '47번국도');
+  assert.equal(a.description, '사고 잦은 구간입니다');
+  assert.equal(a.latitude, 37.5);
+  assert.equal(a.longitude, 127.03);
+  assert.equal(a.omnidirectional, true);
+  assert.equal(a.eventKey, 'ek1');
+  assert.ok(!('headingDeg' in a), '방향을 만들어 넣지 않는다');
+});
+
+test('사고다발구역: 도로명이 없으면 노선번호, 문구가 없으면 콘텐츠 유형을 쓴다. event_key 없으면 필드 자체를 안 만든다', () => {
+  const a = cautionZoneToAlert(caution({ start: { ...caution().start, route_name: '' }, message: ' ', event_key: '' }));
+  assert.equal(a.location, '47');
+  assert.equal(a.description, '사고잦은구간');
+  assert.ok(!('eventKey' in a));
+});
+
+test('사고다발구역은 방향 없이도(omnidirectional) 경로 위 위험으로 매칭된다', () => {
+  const p = MOCK_ROUTE_A.points[1];
+  const a = cautionZoneToAlert(caution({ start: { ...caution().start, location: { lat: p.latitude, lon: p.longitude } } }));
+  const result = matchHazardsToRoute(MOCK_ROUTE_A, [a]);
+  assert.equal(result.onRoute.length, 1);
+});
+
+test('cautionZonesToAlerts: accident_prone 외 유형은 걸러낸다', () => {
+  const zones = [caution({ id: 'a1' }), caution({ id: 'a2', kind: 'work' })];
+  assert.deepEqual(cautionZonesToAlerts(zones).map((a) => a.id), ['a1']);
 });

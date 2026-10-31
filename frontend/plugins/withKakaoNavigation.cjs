@@ -1,4 +1,6 @@
-const { withAndroidManifest, withInfoPlist, withProjectBuildGradle, createRunOncePlugin } = require('expo/config-plugins');
+const fs = require('fs');
+const path = require('path');
+const { withAndroidManifest, withDangerousMod, withInfoPlist, withProjectBuildGradle, createRunOncePlugin } = require('expo/config-plugins');
 
 const repositories = [
   'https://devrepo.kakaomobility.com/repository/kakao-mobility-android-knsdk-public/',
@@ -24,6 +26,24 @@ function withKakaoNavigation(config) {
     }
     return mod;
   });
+  // KNSDK.framework (Kakao's prebuilt binary) was linked against Realm/RealmSwift as dynamic frameworks,
+  // so it looks for them at @rpath at runtime. Expo's autolinking forces Realm back to a static library
+  // because it vendors a precompiled xcframework (expo-modules-autolinking/scripts/ios/precompiled_modules.rb),
+  // which leaves Realm.framework missing from the app bundle and crashes at launch. Expo applies that
+  // downgrade by monkey-patching Pod::Installer#run_podfile_pre_install_hooks to run *after* any Podfile
+  // `pre_install` block, so a plain `pre_install do...end` here gets overridden. Wrap the (already patched)
+  // method once more so our override for just these two pods runs last and wins.
+  config = withDangerousMod(config, ['ios', mod => {
+    const podfilePath = path.join(mod.modRequest.platformProjectRoot, 'Podfile');
+    const contents = fs.readFileSync(podfilePath, 'utf8');
+    const marker = '# tikkeul-kakao-navigation: keep Realm/RealmSwift dynamic for KNSDK';
+    if (!contents.includes(marker)) {
+      const hook = `\n${marker}\nPod::Installer.class_eval do\n  _tikkeul_original_run_podfile_pre_install_hooks = instance_method(:run_podfile_pre_install_hooks)\n  define_method(:run_podfile_pre_install_hooks) do\n    _tikkeul_original_run_podfile_pre_install_hooks.bind(self).call\n    pod_targets.each do |t|\n      if ['Realm', 'RealmSwift'].include?(t.name)\n        def t.build_type\n          Pod::BuildType.dynamic_framework\n        end\n      end\n    end\n  end\nend\n`;
+      fs.writeFileSync(podfilePath, `${contents}${hook}`);
+    }
+    return mod;
+  }]);
+
   return withInfoPlist(config, mod => {
     const key = process.env.KAKAO_NAVI_NATIVE_APP_KEY?.trim();
     if (key) mod.modResults.KakaoNaviNativeAppKey = key;

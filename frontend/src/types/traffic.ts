@@ -86,6 +86,7 @@ export interface CautionZone {
   step_type: string;
   start: CautionPoint;
   notice: CautionPoint | null;
+  event_key: string;
 }
 
 // --- 보호구역 ---

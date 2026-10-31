@@ -1,7 +1,6 @@
 import type * as React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,7 +9,6 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { Bus, Crosshair, Footprints, MapPin, Search, TrainFront, X, type LucideIcon } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,7 +36,8 @@ import { useSpeedingWarning } from '../src/lib/useSpeedingWarning';
 import { useTurnInstructionSpeech } from '../src/lib/useTurnInstructionSpeech';
 import { pickUrgentWarning } from '../src/lib/urgentWarning';
 import { KakaoMap } from '../src/map/KakaoMap';
-import { DEMO_ORIGIN, findDemoDestination } from '../src/map/demoDestinations';
+import { findDemoDestination } from '../src/map/demoDestinations';
+import { getCurrentLocation } from '../src/lib/location/getCurrentLocation';
 import {
   fetchAddress,
   fetchModeRoute,
@@ -204,46 +203,6 @@ function toStyledRoute(option: TransitRouteOption): StyledRoute {
   };
 }
 
-// shortcut: 출발지는 항상 브라우저 GPS(실패 시 서울시청)로 고정한다. 출발지 직접 텍스트 입력(geocoding)은 없음 —
-// 대신 지도를 클릭해서 출발지로 지정할 수 있다.
-// 네이티브에는 브라우저 geolocation 이 없어서(그대로 두면 항상 서울시청이 된다) expo-location 으로 읽는다. 권한 거부·실패는 웹과 같이 서울시청으로 폴백한다.
-async function getNativeLocation(): Promise<RoutePoint> {
-  try {
-    const permission = await Location.requestForegroundPermissionsAsync();
-    if (permission.status !== 'granted') {
-      if (__DEV__) console.warn('[native-nav] origin: permission', permission.status); // 임시 진단 로그(좌표 없음): 확인 후 제거
-      return DEMO_ORIGIN;
-    }
-    const known = await Location.getLastKnownPositionAsync({ maxAge: 60000 });
-    const position =
-      known ??
-      (await Promise.race([
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
-      ]));
-    if (__DEV__) console.warn('[native-nav] origin:', known ? 'last-known' : position ? 'current' : 'timeout'); // 임시 진단 로그(좌표 없음): 확인 후 제거
-    return position ? { lat: position.coords.latitude, lng: position.coords.longitude } : DEMO_ORIGIN;
-  } catch (error) {
-    if (__DEV__) console.warn('[native-nav] origin: error', (error as { message?: string }).message); // 임시 진단 로그(좌표 없음): 확인 후 제거
-    return DEMO_ORIGIN;
-  }
-}
-
-function getCurrentLocation(): Promise<RoutePoint> {
-  if (Platform.OS !== 'web') return getNativeLocation();
-  return new Promise((resolve) => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      resolve(DEMO_ORIGIN);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => resolve({ lat: coords.latitude, lng: coords.longitude }),
-      () => resolve(DEMO_ORIGIN),
-      { timeout: 8000, maximumAge: 60000 },
-    );
-  });
-}
-
 // 검색 실행 버튼. 좁은 화면에서는 아이콘만 보이고, 이름은 접근성 라벨로 남는다.
 function SearchAction({ label, compact, onPress }: { label: string; compact: boolean; onPress: () => void }) {
   return (
@@ -387,11 +346,16 @@ export default function HomeScreen() {
   });
 
   // 어린이보호구역 과속 음성 경고(제한속도 30km/h). 속도를 모르면(liveSpeedKmh null) 경고하지 않는다.
+  // 노인·장애인보호구역은 30km/h가 전국 공통 법정 속도라고 확정할 수 없어 뺀다(지자체 조례로 다를 수 있다).
+  const childZonesOnRoute = useMemo(
+    () => schoolZoneWarning.zoneOnRoute.filter((z) => z.alert.zoneType === 'child'),
+    [schoolZoneWarning.zoneOnRoute],
+  );
   useSpeedingWarning({
     active: !!activeRoute,
     routeKey: schoolZoneRoute?.id ?? '',
     route: schoolZoneRoute,
-    zones: schoolZoneWarning.zoneOnRoute,
+    zones: childZonesOnRoute,
     progressM: liveProgressM,
     speedKmh: liveSpeedKmh,
   });
@@ -571,7 +535,8 @@ export default function HomeScreen() {
     destinationInputRef.current?.focus();
   };
 
-  // 지도에서 고른 위치를 도착지로 지정하고, 그 자리에서 바로 추천 경로로 안내를 시작한다.
+  // 지도에서 고른 위치를 도착지로 지정하고, 검색 결과(경로 스타일 선택지)를 보여준다.
+  // 텍스트로 검색했을 때와 똑같이 여기서 바로 안내를 시작하지 않는다 - 이동수단·경로를 고르는 건 사용자 몫이다.
   const onPickDestination = async () => {
     if (!pickedPoint) return;
     const destinationPoint = pickedPoint;
@@ -579,9 +544,7 @@ export default function HomeScreen() {
     setManualDestination(destinationPoint);
     setDestination(label);
     setPickedPoint(null);
-    const results = await searchRoutes(destinationPoint, label, mode);
-    const recommended = results?.find((r) => r.style === 'recommended') ?? results?.[0];
-    if (recommended) onStartGuidance(recommended);
+    await searchRoutes(destinationPoint, label, mode);
   };
 
   // 위험 경고: 시트가 있으면 그 높이만큼 위로 올린다. 시트를 크게 펼쳐도 경고 카드(닫기 버튼 포함)가 화면 위로 잘리지 않게
